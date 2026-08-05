@@ -1,0 +1,38 @@
+# ===== 安全：绝不提交密钥 =====
+api.json
+*.key
+*.pem
+.env
+credentials*
+
+# ===== 运行时数据（个人世界数据，不入库）=====
+worlds/
+storys/
+run.log
+*.log
+
+# ===== 素材库（版权：从网文提取的风格示范，不入库）=====
+material/
+
+# ===== 构建产物 =====
+worldsim
+worldsim_new
+worldsim_plugin.zip
+*.exe
+*.out
+*.test
+
+# ===== Go =====
+/dist/
+/bin/
+*.o
+
+# ===== 编辑器 =====
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# ===== 插件包分发（单独分发，不入源码库）=====
+/plugins/
+/tmp/

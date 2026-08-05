@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorldSim · 多世界模拟控制台</title>
+<style>
+:root{--bg:#0a0e14;--bg2:#10161f;--bg3:#182130;--card:#121a26;--border:rgba(148,163,184,.14);--text:#e2e8f0;--text2:#7d8ba1;--accent:#38bdf8;--accent2:#818cf8;--green:#34d399;--red:#f87171;--orange:#fbbf24;--purple:#c084fc}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"SF Pro Display",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:radial-gradient(1200px 600px at 20% -10%,rgba(56,189,248,.07),transparent),radial-gradient(1000px 500px at 90% 10%,rgba(129,140,248,.06),transparent),var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+header{position:sticky;top:0;z-index:50;background:rgba(10,14,20,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:800;letter-spacing:.3px}
+.logo .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 12px rgba(56,189,248,.6);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.85)}}
+.world-sel{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:5px 8px}
+.world-sel select{background:transparent;border:none;color:var(--text);font-size:13px;font-weight:600;outline:none;cursor:pointer;padding:3px 4px;max-width:150px}
+.badges{display:flex;gap:7px;flex-wrap:wrap}
+.badge{font-size:11.5px;padding:4px 11px;border-radius:999px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);white-space:nowrap}
+.badge b{color:var(--text);font-weight:600}
+.badge.day b{color:var(--green)}.badge.tension b{color:var(--orange)}.badge.ready b{color:var(--purple)}
+.badge.running b{color:var(--red)}
+.spacer{flex:1}
+.icon-btn{background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--text2);padding:7px 12px;font-size:12.5px;cursor:pointer;transition:all .18s}
+.icon-btn:hover{color:var(--accent);border-color:var(--accent);transform:translateY(-1px)}
+.wrap{display:grid;grid-template-columns:290px 1fr 310px;gap:14px;padding:16px 20px;align-items:start;max-width:1680px;margin:0 auto}
+@media(max-width:1280px){.wrap{grid-template-columns:1fr}}
+.panel{background:linear-gradient(180deg,rgba(18,26,38,.9),rgba(16,22,31,.7));border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;backdrop-filter:blur(8px);box-shadow:0 2px 12px rgba(0,0,0,.25)}
+.panel h2{font-size:12px;color:var(--text2);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px;padding-bottom:9px;border-bottom:1px solid var(--border)}
+.panel h2 .tip{color:var(--accent);font-weight:600}
+.kv{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px dashed var(--border)}
+.kv span:first-child{color:var(--text2)}
+.kv span:last-child{color:var(--text);text-align:right;max-width:62%;font-weight:500}
+button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;transition:all .18s;font-weight:500}
+button:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
+button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;font-weight:700;box-shadow:0 4px 14px rgba(56,189,248,.25)}
+button.primary:hover{filter:brightness(1.1);color:#fff}
+button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+button.danger{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.35);color:var(--red)}
+button.danger:hover{border-color:var(--red);color:var(--red)}
+input,select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:8px 11px;color:var(--text);font-size:13px;width:100%;margin-bottom:8px;transition:border .18s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+.row{display:flex;gap:8px;align-items:center}
+.row button{flex:1}
+label{font-size:11px;color:var(--text2);display:block;margin:6px 0 4px;letter-spacing:.5px}
+.tabs{display:flex;gap:4px;margin-bottom:12px;background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:4px;position:sticky;top:62px;z-index:40;backdrop-filter:blur(8px);flex-wrap:wrap}
+.tab{flex:1;text-align:center;padding:8px 4px;border-radius:8px;font-size:12.5px;color:var(--text2);cursor:pointer;transition:all .18s;border:none;background:transparent;min-width:76px}
+.tab.active{background:linear-gradient(135deg,rgba(56,189,248,.16),rgba(129,140,248,.14));color:var(--accent);font-weight:700}
+.tab:hover{color:var(--text)}
+.tab-pane{display:none}.tab-pane.active{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.chronicle{max-height:66vh;overflow-y:auto;padding-right:6px}
+.entry{display:flex;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);font-size:13px;line-height:1.55;animation:fade .3s ease}
+.entry .tag{flex-shrink:0;font-size:10.5px;padding:2px 8px;border-radius:5px;font-weight:700;margin-top:3px;letter-spacing:.5px}
+.tag.FACT{background:rgba(52,211,153,.13);color:var(--green)}
+.tag.STATE{background:rgba(56,189,248,.13);color:var(--accent)}
+.tag.SAID{background:rgba(192,132,252,.13);color:var(--purple)}
+.tag.SUMMARY{background:rgba(251,191,36,.13);color:var(--orange)}
+.entry .meta{color:var(--text2);font-size:10.5px;flex-shrink:0;width:30px;padding-top:3px}
+.entry .content{flex:1}
+.entry.restricted{opacity:.45}
+.thinking{background:linear-gradient(135deg,rgba(129,140,248,.07),rgba(56,189,248,.04));border:1px solid rgba(129,140,248,.25);border-left:3px solid var(--accent2);border-radius:10px;padding:12px;font-size:12.5px;line-height:1.75;color:#c7d2fe;white-space:pre-wrap;max-height:230px;overflow-y:auto}
+.event-card{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:11px;margin-bottom:9px;font-size:12.5px;transition:border .18s}
+.event-card:hover{border-color:rgba(56,189,248,.35)}
+.event-card .et{font-weight:700;color:var(--accent);font-size:13px}
+.event-card .sev{font-size:11px;color:var(--orange);margin-left:6px}
+.event-card .frame{color:#b6c2d4;line-height:1.6;margin-top:5px;font-size:12.5px}
+.dlg{display:flex;gap:9px;padding:7px 2px;border-bottom:1px solid var(--border);font-size:13px;line-height:1.5}
+.dlg .who{flex-shrink:0;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(129,140,248,.14);color:var(--accent2);align-self:flex-start}
+.dlg .who.hero{background:rgba(52,211,153,.14);color:var(--green)}
+.novel-list{max-height:60vh;overflow-y:auto}
+.ch-item{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all .18s}
+.ch-item:hover{border-color:var(--accent);transform:translateX(3px)}
+.ch-item .num{font-size:11px;color:var(--accent2);font-weight:800;width:32px;flex-shrink:0}
+.ch-item .tt{flex:1;font-weight:600;font-size:13.5px}
+.ch-item .st{font-size:11px;color:var(--text2)}
+.ch-item .st.done{color:var(--green)}
+.novel-read{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:18px;line-height:2;font-size:14px;max-height:64vh;overflow-y:auto;white-space:pre-wrap;color:#d4dce8}
+.mem-block{margin-bottom:12px}
+.mem-block .who{font-size:12.5px;font-weight:700;color:var(--accent2);margin-bottom:6px}
+.mem-item{display:flex;gap:8px;padding:6px 2px;border-bottom:1px dashed var(--border);font-size:12.5px;line-height:1.5;color:#b6c2d4}
+.mem-item .imp{flex-shrink:0;font-size:10px;color:var(--orange);align-self:flex-start;margin-top:3px}
+.entity-grid{display:grid;gap:8px}
+.entity{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;font-size:12.5px}
+.entity .en{font-weight:700;color:var(--text);font-size:13px}
+.entity .ed{color:var(--text2);font-size:11.5px;margin-top:3px;line-height:1.5}
+.modal{position:fixed;inset:0;background:rgba(2,6,12,.75);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:200}
+.modal.show{display:flex}
+.modal-box{background:var(--bg2);border:1px solid rgba(56,189,248,.4);border-radius:16px;padding:26px;max-width:560px;width:92%;max-height:82vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-box h3{color:var(--orange);margin-bottom:12px;font-size:16px}
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid rgba(56,189,248,.45);color:var(--text);padding:11px 22px;border-radius:12px;font-size:13px;display:none;z-index:300;box-shadow:0 8px 30px rgba(0,0,0,.45)}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(56,189,248,.25);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-thumb{background:rgba(148,163,184,.22);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:rgba(148,163,184,.4)}
+.empty{color:var(--text2);font-size:13px;text-align:center;padding:26px 8px;border:1px dashed var(--border);border-radius:10px}
+.progress{height:8px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--border);margin:8px 0}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;transition:width .5s ease}
+.dec-list{max-height:66vh;overflow-y:auto;padding-right:4px}
+.dec-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:11px;font-size:12.5px;transition:border .18s}
+.dec-card:hover{border-color:rgba(56,189,248,.35)}
+.dec-card .dh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+.dec-card .dday{font-size:11px;color:var(--accent2);font-weight:800}
+.dec-card .dtype{font-size:10.5px;padding:2px 8px;border-radius:5px;background:rgba(129,140,248,.12);color:var(--accent2)}
+.dec-card .dtitle{font-weight:700;color:var(--text);font-size:13.5px;flex:1}
+.st-pill{font-size:10.5px;padding:2px 9px;border-radius:99px;font-weight:700}
+.st-pill.pending{background:rgba(251,191,36,.13);color:var(--orange)}
+.st-pill.decided{background:rgba(52,211,153,.13);color:var(--green)}
+.st-pill.overridden{background:rgba(192,132,252,.15);color:var(--purple)}
+.dec-card .dctx{color:#b6c2d4;line-height:1.6;margin-bottom:9px;padding-left:9px;border-left:2px solid var(--border)}
+.dec-ai{background:linear-gradient(135deg,rgba(56,189,248,.06),rgba(129,140,248,.05));border-radius:8px;padding:8px 10px;font-size:12px;color:#9fb3d8;margin-bottom:8px}
+.dec-ai b{color:var(--accent)}
+.dec-ai .r{color:var(--text2);font-size:11.5px;margin-top:3px}
+.opt-btn{display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;padding:9px 11px;margin-bottom:5px;border-radius:9px;background:var(--bg3);border:1px solid var(--border);color:var(--text);cursor:pointer;transition:all .15s}
+.opt-btn:hover{border-color:var(--green);background:rgba(52,211,153,.06)}
+.opt-btn .oi{flex-shrink:0;font-size:11px;font-weight:800;width:20px;height:20px;border-radius:6px;background:rgba(56,189,248,.14);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.opt-btn .od{flex:1;line-height:1.55}
+.opt-btn .or{color:var(--text2);font-size:11px;margin-top:2px}
+.opt-btn.chosen{border-color:var(--purple);background:rgba(192,132,252,.09)}
+.opt-btn.chosen .oi{background:var(--purple);color:#fff}
+.readiness-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.r-item{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+.r-item .rv{font-size:20px;font-weight:800;color:var(--accent)}
+.r-item .rl{font-size:11px;color:var(--text2);margin-top:3px}
+.r-flag{font-size:13px;font-weight:700;padding:10px;border-radius:10px;text-align:center;margin-bottom:10px}
+.r-flag.ok{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.4);color:var(--green)}
+.r-flag.no{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);color:var(--orange)}
+.wb-view{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:16px;white-space:pre-wrap;font-size:12.5px;line-height:1.8;color:#b6c2d4;max-height:66vh;overflow-y:auto}
+.stat-grid{display:grid;gap:8px}
+.stat-row{display:flex;justify-content:space-between;padding:7px 4px;border-bottom:1px dashed var(--border);font-size:12.5px}
+.stat-row span:first-child{color:var(--text2)}
+.stat-row span:last-child{color:var(--text);font-weight:600}
+.fs-view{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:14px;white-space:pre-wrap;font-size:12.5px;line-height:1.7;color:#e8c987;max-height:60vh;overflow-y:auto}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="dot"></span>WorldSim</div>
+  <div class="world-sel">
+    <span style="font-size:12px;color:var(--text2)">🌐</span>
+    <select id="worldSel" onchange="selectWorld(this.value)"></select>
+    <button class="icon-btn" onclick="showCreateWorld()" title="新建世界">＋</button>
+  </div>
+  <div class="badges">
+    <span class="badge">📅 Day <b id="badgeDay">-</b></span>
+    <span class="badge">🌦 <b id="badgeWeather">-</b></span>
+    <span class="badge tension">⚡ 张力 <b id="badgeTension">-</b></span>
+    <span class="badge ready">🎬 <b id="badgeReady">-</b></span>
+    <span class="badge running" id="badgeLoop" style="display:none">🔄 <b>运行中</b></span>
+    <span class="badge">#<b id="badgeRev">-</b></span>
+  </div>
+  <div class="spacer"></div>
+  <button class="icon-btn" onclick="refreshAll()">🔄 刷新</button>
+</header>
+
+<div class="wrap">
+  <div>
+    <div class="panel">
+      <h2>⚙️ 操作台</h2>
+      <label>主角名</label>
+      <div class="row" style="margin-bottom:4px">
+        <input id="heroName" placeholder="主角名">
+        <button class="primary" onclick="initWorld()" id="btnInit">初始化</button>
+      </div>
+      <label>LLM 模式</label>
+      <div class="row">
+        <select id="llmMode">
+          <option value="real" selected>real · 真实LLM</option>
+          <option value="mock">mock · 本地模拟</option>
+          <option value="off">off · 模板</option>
+        </select>
+        <button onclick="setLLM()">应用</button>
+      </div>
+      <input id="baseUrl" placeholder="Base URL" value="https://tokenrhythm.studio/v1">
+      <input id="modelName" placeholder="模型" value="deepseek-v4-flash">
+      <input id="apiKey" placeholder="API Key" type="password">
+      <label>🧠 模型分层（各司其职）</label>
+      <div class="row" style="gap:6px;margin-bottom:6px">
+        <span style="font-size:11px;color:var(--text2);width:52px;flex-shrink:0">⚡ 高频</span>
+        <select id="tierFast"></select>
+      </div>
+      <div class="row" style="gap:6px;margin-bottom:6px">
+        <span style="font-size:11px;color:var(--text2);width:52px;flex-shrink:0">🔷 推理</span>
+        <select id="tierNormal"></select>
+      </div>
+      <div class="row" style="gap:6px;margin-bottom:6px">
+        <span style="font-size:11px;color:var(--text2);width:52px;flex-shrink:0">💎 产出</span>
+        <select id="tierPremium"></select>
+      </div>
+      <div style="font-size:10.5px;color:var(--text2);margin-bottom:4px">⚡事件/NPC · 🔷主角/GM/反思 · 💎小说/抉择</div>
+      <label>单次模拟</label>
+      <div class="row">
+        <input id="daysNum" type="number" value="1" min="1" max="30" style="width:70px;flex:0 0 70px">
+        <select id="simMode">
+          <option value="auto" selected>⚙️ 自动</option>
+          <option value="scene">🎬 Scene</option>
+          <option value="summary">📝 Summary</option>
+          <option value="skip">⏩ Skip</option>
+        </select>
+        <button class="primary" onclick="runDays()" id="btnRun" style="flex:0 0 88px">▶ 跑</button>
+      </div>
+      <div style="border-top:1px dashed var(--border);margin:14px 0 8px"></div>
+      <label>🔁 后台持续运行（到就绪自动停）</label>
+      <div class="row">
+        <input id="loopDays" type="number" value="1000" min="1" style="width:88px;flex:0 0 88px">
+        <select id="loopMode" style="flex:1">
+          <option value="auto" selected>⚙️ 自动</option>
+          <option value="scene">🎬 Scene</option>
+          <option value="summary">📝 Summary</option>
+        </select>
+        <button class="primary" onclick="startLoop()" id="btnLoopStart" style="flex:0 0 66px">▶ 开始</button>
+        <button class="danger" onclick="stopLoop()" id="btnLoopStop" style="flex:0 0 66px;display:none">⏹ 停止</button>
+      </div>
+      <div class="progress"><i id="loopBar" style="width:0%"></i></div>
+      <div id="loopInfo" style="font-size:11.5px;color:var(--text2)">循环未启动</div>
+      <div style="border-top:1px dashed var(--border);margin:14px 0 8px"></div>
+      <label>⏪ 时间回退（快照存档）</label>
+      <div class="row" style="margin-bottom:6px">
+        <input id="snapReason" placeholder="存档说明（可选）">
+        <button class="primary" onclick="makeSnapshot()" style="flex:0 0 88px">💾 存档</button>
+      </div>
+      <div id="snapList" style="max-height:150px;overflow-y:auto;font-size:11.5px"><span style="color:var(--text2)">暂无快照</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>🎬 就绪度 <span class="tip">素材够不够写小说</span></h2>
+      <div id="readiness"><div class="empty">初始化后显示</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>📊 世界状态</h2>
+      <div id="worldState"><div class="empty">初始化后显示</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>🏙️ 全局事件</h2>
+      <div id="globalEvents" style="font-size:12.5px;line-height:1.7;color:#b6c2d4"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="tabs">
+      <button class="tab active" data-tab="chronicle" onclick="switchTab('chronicle')">📜 编年史</button>
+      <button class="tab" data-tab="decisions" onclick="switchTab('decisions')">🎯 决策</button>
+      <button class="tab" data-tab="novel" onclick="switchTab('novel')">📖 小说</button>
+      <button class="tab" data-tab="memory" onclick="switchTab('memory')">🧠 记忆</button>
+      <button class="tab" data-tab="entities" onclick="switchTab('entities')">🧍 实体</button>
+      <button class="tab" data-tab="worldbook" onclick="switchTab('worldbook')">📚 世界书</button>
+      <button class="tab" data-tab="stats" onclick="switchTab('stats')">📊 统计</button>
+    </div>
+
+    <div class="panel">
+      <div class="tab-pane active" id="pane-chronicle">
+        <div class="chronicle" id="chronicle"><div class="empty">运行模拟后生成…</div></div>
+      </div>
+
+      <div class="tab-pane" id="pane-decisions">
+        <div style="font-size:11.5px;color:var(--text2);margin-bottom:10px">AI 已代决的岔口可随时翻案：点选项即可改选，写手将按你的方向写。</div>
+        <div class="dec-list" id="decisions"><div class="empty">暂无岔口决策<br>（事件带多个方向时自动入队）</div></div>
+      </div>
+
+      <div class="tab-pane" id="pane-novel">
+        <div class="row" style="margin-bottom:12px">
+          <button class="primary" onclick="generateNovel()" id="btnNovel" style="flex:1">✨ 生成小说章节</button>
+          <button class="icon-btn" onclick="loadNovel()">🔄</button>
+        </div>
+        <div id="novelContent"><div class="empty">还没有章节。<br>先跑几天模拟，再点「生成小说章节」</div></div>
+      </div>
+
+      <div class="tab-pane" id="pane-memory">
+        <div id="memoryContent"><div class="empty">角色记忆将在模拟中沉淀…</div></div>
+      </div>
+
+      <div class="tab-pane" id="pane-entities">
+        <div class="entity-grid" id="entities"><div class="empty">初始化后显示</div></div>
+      </div>
+
+      <div class="tab-pane" id="pane-worldbook">
+        <div class="wb-view" id="worldbook"><div class="empty">加载中…</div></div>
+      </div>
+
+      <div class="tab-pane" id="pane-stats">
+        <div class="stat-grid" id="stats"><div class="empty">暂无统计</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>🧠 主角内心 <span class="tip">三问决策</span></h2>
+      <div class="thinking" id="thinking">尚未运行…</div>
+    </div>
+    <div class="panel">
+      <h2>💬 今日对话</h2>
+      <div id="dialogue"><div class="empty">无</div></div>
+    </div>
+    <div class="panel">
+      <h2>🎲 今日事件</h2>
+      <div id="events"><div class="empty">无</div></div>
+    </div>
+    <div class="panel">
+      <h2>🔗 未回收伏笔 <span class="tip">防忘坑</span></h2>
+      <div class="fs-view" id="foreshadows"><div class="empty">暂无</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalCreate">
+  <div class="modal-box">
+    <h3>🌐 新建世界</h3>
+    <label>世界名称</label>
+    <input id="newWorldName" placeholder="如：青岚界·灵剑山">
+    <label>🎨 主题包（选它 → LLM 自动生成完整世界书）</label>
+    <select id="newTheme"><option value="">（手动指定世界书）</option></select>
+    <label>一句话设定（可选，主题包模式下 LLM 按此生成）</label>
+    <input id="newDesc" placeholder="如：灵气复苏三百年后的青岚界，山村少年捡到一枚残破剑胚">
+    <label>世界书（可选，worldbooks/ 池，手动模式用）</label>
+    <input id="newWorldbook" placeholder="如：临江市·都市怪谈（留空用默认）">
+    <div class="row" style="margin-top:12px">
+      <button onclick="createWorld()" class="primary">创建并进入</button>
+      <button onclick="$('modalCreate').classList.remove('show')">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <h3>⚡ 抉择点</h3>
+    <div id="modalMsg" style="font-size:14px;line-height:1.7;color:#d4dce8"></div>
+    <div id="modalOptions" style="margin-top:14px"></div>
+    <div class="row" style="margin-top:14px">
+      <button onclick="closeModal()" class="primary" style="flex:1">继续模拟</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+let lastResult=null;
+let heroName='';
+
+/* 可用模型（中转站探测结果） */
+const MODELS=['deepseek-v4-flash','deepseek-v4-flash-0731','deepseek-v4-pro','glm-5','glm-5.1','glm-5.2','qwen3.7-max','qwen3.8-max','kimi-k2.5','kimi-k2.6','kimi-k2.7-code','minimax-m2.5','minimax-m2.7','mimo-v2.5-pro'];
+function fillModelSel(id,sel){
+  $(id).innerHTML=MODELS.map(m=>`<option ${m===sel?'selected':''}>${m}</option>`).join('');
+}
+fillModelSel('tierFast','deepseek-v4-flash-0731');
+fillModelSel('tierNormal','deepseek-v4-pro');
+fillModelSel('tierPremium','deepseek-v4-pro');
+
+async function j(url,opt){
+  try{const r=await fetch(url,opt);return await r.json()}
+  catch(e){return {ok:false,error:'网络错误: '+e.message}}
+}
+
+/* ---------- 多世界 ---------- */
+async function loadWorlds(){
+  const d=await j('/api/worlds');
+  if(!d.worlds)return;
+  const sel=$('worldSel');
+  sel.innerHTML='';
+  if(!d.worlds.length){sel.innerHTML='<option value="">（无世界）</option>';return}
+  d.worlds.forEach(w=>{
+    const o=document.createElement('option');
+    o.value=w.name;o.textContent=(w.active?'● ':'')+w.name+(w.day>0?' · D'+w.day:'');
+    o.selected=w.active;sel.appendChild(o);
+  });
+}
+async function selectWorld(name){
+  if(!name)return;
+  const d=await j('/api/worlds/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({world:name})});
+  if(d.ok){toast('已切换世界：'+name);refreshAll()}
+  else toast(d.error||'切换失败');
+}
+function showCreateWorld(){loadThemes();$('modalCreate').classList.add('show');setTimeout(()=>$('newWorldName').focus(),100)}
+async function loadThemes(){
+  const d=await j('/api/worldbooks/themes');
+  const sel=$('newTheme');
+  if(d.themes&&d.themes.length){
+    sel.innerHTML='<option value="">（手动指定世界书）</option>'+d.themes.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  }else{
+    sel.innerHTML='<option value="">（无主题包）</option>';
+  }
+}
+async function createWorld(){
+  const name=$('newWorldName').value.trim();
+  const theme=$('newTheme').value;
+  const desc=$('newDesc').value.trim();
+  const wb=$('newWorldbook').value.trim();
+  if(!name){toast('请输入世界名称');return}
+  $('modalCreate').classList.remove('show');
+  const body={name};
+  if(theme)body.theme=theme;
+  if(desc)body.desc=desc;
+  if(wb)body.worldbook=wb;
+  const d=await j('/api/worlds/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(d.ok){toast('世界已创建：'+name);await loadWorlds();refreshAll()}
+  else toast(d.error||'创建失败');
+}
+
+/* ---------- 核心操作 ---------- */
+async function initWorld(){
+  const hero=$('heroName').value.trim()||heroName||'';
+  const d=await j('/api/world/init',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protagonist:hero})});
+  if(d.ok){toast('世界初始化完成 · 主角：'+(hero||'（世界书自拟）'));await loadWorlds();refreshAll()}
+  else toast('失败：'+(d.error||''));
+}
+async function setLLM(){
+  const mode=$('llmMode').value;
+  const body={mode};
+  if(mode==='real'){
+    body.base_url=$('baseUrl').value.trim();
+    body.model=$('modelName').value.trim();
+    body.api_key=$('apiKey').value.trim();
+    body.model_tiers={
+      fast:$('tierFast').value,
+      normal:$('tierNormal').value,
+      premium:$('tierPremium').value
+    };
+  }
+  const d=await j('/api/world/sim/llm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(d.ok){toast('LLM 模式：'+mode+' · 分层已生效');refreshAll()}else toast('失败：'+(d.error||''));
+}
+async function runDays(){
+  const days=Math.min(parseInt($('daysNum').value)||1,30);
+  const mode=$('simMode').value;
+  $('btnRun').disabled=true;$('btnRun').innerHTML='<span class="spinner"></span>';
+  const d=await j('/api/world/sim/day',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days,mode})});
+  $('btnRun').disabled=false;$('btnRun').textContent='▶ 跑';
+  if(!d.ok){toast('失败：'+(d.error||''));return}
+  lastResult=d;
+  toast('模拟完成：跑至 Day '+d.day);
+  renderDialogue(d);renderEvents(d);
+  refreshAll();
+  if(d.paused)showPauseModal(d);
+}
+
+/* ---------- 后台持续运行 ---------- */
+async function startLoop(){
+  const days=parseInt($('loopDays').value)||1000;
+  const mode=$('loopMode').value;
+  const d=await j('/api/world/loop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'start',days,mode})});
+  if(d.ok){toast('循环启动 → 目标 Day '+d.target_day);refreshAll()}
+  else toast('失败：'+(d.error||''));
+}
+async function stopLoop(){
+  await j('/api/world/loop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'stop'})});
+  toast('已停止循环');
+  $('btnLoopStart').style.display='';$('btnLoopStop').style.display='none';
+  $('badgeLoop').style.display='none';
+}
+async function renderLoop(){
+  const d=await j('/api/world/loop');
+  if(!d||d.running===undefined)return;
+  if(d.running){
+    $('btnLoopStart').style.display='none';$('btnLoopStop').style.display='';
+    $('badgeLoop').style.display='';
+    const pct=Math.min(100,Math.round((d.day/d.target_day)*100));
+    $('loopBar').style.width=pct+'%';
+    $('loopInfo').innerHTML='<b style="color:var(--green)">运行中</b> · '+escapeHtml(d.world)+' · Day '+d.day+' → 目标 '+d.target_day+(d.ready?' · 🎬 已就绪':'');
+  }else{
+    $('btnLoopStart').style.display='';$('btnLoopStop').style.display='none';
+    $('badgeLoop').style.display='none';
+    if(d.target_day>0&&d.day>0){
+      $('loopInfo').innerHTML='已停止 · Day '+d.day+(d.ready?' · 🎬 素材就绪，可以写小说了！':' · 未就绪');
+    }else{
+      $('loopInfo').textContent='循环未启动';
+    }
+  }
+}
+
+/* ---------- 决策 ---------- */
+async function renderDecisions(){
+  const d=await j('/api/world/decisions');
+  const list=d.decisions||[];
+  if(!list.length){$('decisions').innerHTML='<div class="empty">暂无岔口决策<br>（事件带多个方向时自动入队）</div>';return}
+  $('decisions').innerHTML=list.map(dc=>{
+    const st=dc.status==='decided'?(dc.user_choice?'overridden':'decided'):'pending';
+    const stTxt=dc.status==='decided'?(dc.user_choice?'你已改选':'已定'):'待你翻案';
+    const aiLine=dc.ai_choice?`<div class="dec-ai"><b>AI 代决：→ ${escapeHtml(dc.ai_choice)}</b><div class="r">${escapeHtml(dc.ai_reason||'')}</div></div>`:'';
+    const opts=(dc.options||[]).map(o=>{
+      const chosen=dc.user_choice===o.id||(!dc.user_choice&&dc.ai_choice===o.id);
+      return `<button class="opt-btn ${chosen?'chosen':''}" onclick="resolveDecision('${dc.id}','${o.id}')">
+        <span class="oi">${o.id}</span>
+        <span class="od">${escapeHtml(o.desc)}${o.reason?`<div class="or">→ ${escapeHtml(o.reason)}</div>`:''}</span>
+      </button>`;
+    }).join('');
+    return `<div class="dec-card">
+      <div class="dh">
+        <span class="dday">D${dc.day}</span>
+        <span class="dtype">${escapeHtml(dc.type||'')}</span>
+        <span class="dtitle">${escapeHtml(dc.title||'')}</span>
+        <span class="st-pill ${st}">${stTxt}</span>
+      </div>
+      <div class="dctx">${escapeHtml(dc.context||'')}</div>
+      ${aiLine}
+      ${opts}
+    </div>`;
+  }).join('');
+}
+async function resolveDecision(id,choice){
+  const d=await j('/api/world/decisions/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({choice})});
+  if(d.ok){toast('已改选：'+choice+' · 写手将按此方向推进');renderDecisions()}
+  else toast('失败：'+(d.error||''));
+}
+
+/* ---------- 就绪度 ---------- */
+async function renderReadiness(){
+  const d=await j('/api/world/readiness');
+  if(!d||d.ready===undefined){$('readiness').innerHTML='<div class="empty">模拟器未初始化</div>';return}
+  const flag=d.ready?`<div class="r-flag ok">🎬 素材就绪 — 可以生成小说了！</div>`:`<div class="r-flag no">⏳ 素材积累中… ${escapeHtml(d.reason||'')}</div>`;
+  $('readiness').innerHTML=flag+`<div class="readiness-grid">
+    <div class="r-item"><div class="rv">${d.arcs_done}/3</div><div class="rl">完成段落</div></div>
+    <div class="r-item"><div class="rv">${d.drama_entries}/12</div><div class="rl">戏剧素材</div></div>
+    <div class="r-item"><div class="rv">${d.foreshadows_resolved}/${d.foreshadows_total}</div><div class="rl">伏笔回收</div></div>
+    <div class="r-item"><div class="rv">${(d.tension||0).toFixed(2)}</div><div class="rl">当前张力</div></div>
+  </div>`;
+  $('badgeReady').textContent=d.ready?'就绪':'积累中';
+}
+
+/* ---------- 渲染 ---------- */
+async function refreshAll(){
+  loadWorlds();
+  const st=await j('/api/world/state');
+  if(st && st.day!==undefined){
+    $('badgeDay').textContent=st.day;
+    $('badgeWeather').textContent=st.weather||'-';
+    $('badgeTension').textContent=(st.world_level.tension||0).toFixed(2);
+    $('badgeRev').textContent=st.revision;
+    renderWorldState(st);
+    renderEntities(st);
+    renderGlobalEvents(st);
+    const ents=st.entities||{};
+    const hero=Object.keys(ents).find(k=>ents[k]&&ents[k].extra&&ents[k].extra.role==='protagonist');
+    if(hero){heroName=hero;$('heroName').placeholder='主角：'+hero;if(!$('heroName').value)$('heroName').value=hero}
+  }
+  const th=await j('/api/world/sim/thinking');
+  if(th.thinking!==undefined)$('thinking').textContent=th.thinking||'（无）';
+  const ch=await j('/api/world/chronicle');
+  if(ch.chronicle)renderChronicle(ch.chronicle);
+  loadToday();
+  const me=await j('/api/world/memories');
+  if(me.memories!==undefined)renderMemories(me.memories);
+  renderDecisions();
+renderReadiness();
+renderLoop();
+renderSnapshots();
+loadForeshadows();
+loadNovel();
+}
+function renderWorldState(st){
+  const t=st.world_level||{};
+  const ents=st.entities||{};
+  const hero=Object.keys(ents).find(k=>ents[k]&&ents[k].extra&&ents[k].extra.role==='protagonist')||Object.keys(ents)[0]||'';
+  const h=ents[hero]||{};
+  let html='';
+  html+=`<div class="kv"><span>🌐 世界</span><span>${escapeHtml($('worldSel').value||'-')}</span></div>`;
+  html+=`<div class="kv"><span>📅 天数</span><span>Day ${st.day}</span></div>`;
+  html+=`<div class="kv"><span>⚡ 张力</span><span>${(t.tension||0).toFixed(2)}</span></div>`;
+  html+=`<div class="kv"><span>🌦 天气</span><span>${escapeHtml(st.weather||'-')}</span></div>`;
+  if(hero){
+    html+=`<div class="kv"><span>🧍 主角</span><span>${escapeHtml(hero)} · ${escapeHtml(h.job||'-')}</span></div>`;
+    html+=`<div class="kv"><span>💰 金钱</span><span>¥${h.money??'-'}</span></div>`;
+    html+=`<div class="kv"><span>❤️ 健康</span><span>${h.health??'-'}</span></div>`;
+    html+=`<div class="kv"><span>📍 位置</span><span>${escapeHtml(h.location||'-')}</span></div>`;
+  }
+  $('worldState').innerHTML=html;
+}
+function renderGlobalEvents(st){
+  const evs=(st.world_level&&st.world_level.global_events)||[];
+  $('globalEvents').innerHTML=evs.length?evs.map(e=>'· '+escapeHtml(e)).join('<br>'):'<span style="color:var(--text2)">无</span>';
+}
+function renderChronicle(list){
+  $('chronicle').innerHTML=list.length?list.slice().reverse().map(e=>{
+    const k=e.kind==='FACT'?'FACT':e.kind==='SAID'?'SAID':e.kind==='SUMMARY'?'SUMMARY':'STATE';
+    return `<div class="entry ${(e.visibility==='restricted'||e.visibility==='private')?'restricted':''}"><span class="tag ${k}">${k}</span><span class="meta">D${e.day}</span><div class="content">${escapeHtml(e.content)}</div></div>`;
+  }).join(''):'<div class="empty">运行模拟后生成…</div>';
+}
+/* ---------- 今日对话 / 今日事件（手动跑天与后台循环都会更新 lastDay）---------- */
+async function loadToday(){
+  const d=await j('/api/world/today');
+  if(!d||!d.day)return;
+  renderDialogue(d);renderEvents(d);
+}
+function renderDialogue(d){
+  const last=d.results?d.results[d.results.length-1]:d;
+  const dl=last.dialogue||[];
+  if(!dl.length){$('dialogue').innerHTML='<div class="empty">今日无对话（平淡日）</div>';return}
+  $('dialogue').innerHTML=dl.map(t=>{
+    const me=t.speaker.includes(heroName)||t.speaker==='protagonist';
+    return `<div class="dlg"><span class="who ${me?'hero':''}">${escapeHtml(t.speaker.replace('npc_',''))}</span><span>${escapeHtml(t.speech)}</span></div>`;
+  }).join('');
+}
+function renderEvents(d){
+  const last=d.results?d.results[d.results.length-1]:d;
+  const evs=last.events||[];
+  $('events').innerHTML=evs.length?evs.map(e=>`<div class="event-card"><span class="et">${escapeHtml(e.title)}</span><span class="sev">sev ${e.severity.toFixed(2)}</span><div class="frame">${escapeHtml(e.frame)}</div></div>`).join(''):'<div class="empty">无</div>';
+}
+function renderEntities(st){
+  const ents=st.entities||{};
+  const keys=Object.keys(ents);
+  $('entities').innerHTML=keys.length?keys.map(k=>{
+    const e=ents[k];
+    return `<div class="entity"><div class="en">${escapeHtml(k)}</div><div class="ed">${escapeHtml(e.job||'')} · ${escapeHtml(e.location||'')}${e.health?' · 健康'+e.health:''}</div></div>`;
+  }).join(''):'<div class="empty">初始化后显示</div>';
+}
+function renderMemories(data){
+  if(!data||!data.length){$('memoryContent').innerHTML='<div class="empty">角色记忆将在模拟中沉淀…</div>';return}
+  $('memoryContent').innerHTML=data.map(a=>`<div class="mem-block"><div class="who">🧠 ${escapeHtml(a.actor)}</div>${a.memories.map(m=>`<div class="mem-item"><span class="imp">${(m.importance*100).toFixed(0)}%</span><span>${escapeHtml(m.content)}</span></div>`).join('')}</div>`).join('');
+}
+
+/* ---------- 时间回退 ---------- */
+async function makeSnapshot(){
+  const reason=$('snapReason').value.trim()||'手动存档';
+  const d=await j('/api/world/snapshot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason})});
+  if(d.ok){toast('💾 已存档 Day'+d.snapshot.day+'（'+reason+'）');renderSnapshots()}
+  else toast('失败：'+(d.error||''));
+}
+async function renderSnapshots(){
+  const d=await j('/api/world/snapshots');
+  const list=d.snapshots||[];
+  if(!list.length){$('snapList').innerHTML='<span style="color:var(--text2)">暂无快照（每30天自动存，或点💾手动存）</span>';return}
+  $('snapList').innerHTML=list.map(s=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 2px;border-bottom:1px dashed var(--border)">
+    <span style="color:var(--accent);font-weight:700;flex-shrink:0">D${s.day}</span>
+    <span style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.reason||'')}</span>
+    <button style="padding:2px 8px;font-size:11px" onclick="rewindTo(${s.day})" title="回退到 D${s.day}（恢复当时状态，重新演化）">⏪ 回退</button>
+  </div>`).join('');
+}
+async function rewindTo(day){
+  if(!confirm('确定回退到 Day'+day+'？\n当前之后的一切（编年史/记忆/决策/伏笔）都会被该时间点的状态覆盖，并从那里重新演化出新分支。'))return;
+  const d=await j('/api/world/rewind',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({day})});
+  if(d.ok){toast('⏪ 已回退到 Day'+d.rewound_to+' · 可重新开始循环');refreshAll()}
+  else toast('回退失败：'+(d.error||''));
+}
+
+/* ---------- 世界书 / 统计 / 伏笔 ---------- */
+async function loadWorldbook(){
+  const d=await j('/api/world/worldbook');
+  if(d.content!==undefined)$('worldbook').innerHTML=escapeHtml(d.content)||'<div class="empty">（世界书为空）</div>';
+}
+async function loadStats(){
+  const d=await j('/api/world/token_stats');
+  if(!d||d.total_calls===undefined){$('stats').innerHTML='<div class="empty">暂无统计（跑几天模拟后生成）</div>';return}
+  const rows=[
+    ['总调用次数',d.total_calls||0],
+    ['缓存命中',d.cache_hit_rate||'0%'],
+    ['输入 tokens',d.total_prompt_tokens||0],
+    ['输出 tokens',d.total_completion_tokens||0],
+    ['合计 tokens',d.total_tokens||0],
+  ];
+  $('stats').innerHTML=rows.map(r=>`<div class="stat-row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('')+(d.spans&&d.spans.length?`<div style="margin-top:10px;font-size:11px;color:var(--text2)">最近调用：</div>`+d.spans.slice(-8).reverse().map(s=>`<div class="stat-row"><span>${escapeHtml(s.name||s.agent||'')}</span><span>${escapeHtml(s.model||'')} · ${s.tokens||0}t</span></div>`).join(''):'');
+}
+async function loadForeshadows(){
+  const d=await j('/api/world/foreshadows');
+  $('foreshadows').innerHTML=d.foreshadows?escapeHtml(d.foreshadows):'<div class="empty">暂无未回收伏笔</div>';
+}
+
+/* ---------- 小说 ---------- */
+async function loadNovel(){
+  const d=await j('/api/world/novel');
+  if(!d.plans)return;
+  const plans=d.plans||[];
+  if(!plans.length){$('novelContent').innerHTML='<div class="empty">还没有章节。<br>先跑几天模拟，再点「生成小说章节」</div>';return}
+  $('novelContent').innerHTML=`<div class="novel-list">`+plans.map(p=>`<div class="ch-item" onclick="readChapter(${p.num})"><span class="num">${String(p.num).padStart(2,'0')}</span><span class="tt">${escapeHtml(p.title||('第'+p.num+'章'))}</span><span class="st ${p.status==='done'?'done':''}">${p.status==='done'?'✅ 已生成':'⏳ 待生成'}</span></div>`).join('')+`</div>`;
+  if(d.exports&&d.exports.length){
+    $('novelContent').innerHTML+='<div style="margin-top:10px;font-size:11.5px;color:var(--text2)">📄 已导出：'+d.exports.map(e=>e.split('/').pop()).join('、')+'</div>';
+  }
+}
+async function generateNovel(){
+  $('btnNovel').disabled=true;$('btnNovel').innerHTML='<span class="spinner"></span> 写作中…';
+  toast('小说写手开始创作（约1-3分钟/章）…');
+  const d=await j('/api/world/novel/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+  $('btnNovel').disabled=false;$('btnNovel').textContent='✨ 生成小说章节';
+  if(d.ok){toast('✅ 已生成章节：'+((d.written||[]).join('、')||'无新章节'));loadNovel()}
+  else toast('失败：'+(d.error||''));
+}
+async function readChapter(num){
+  const d=await j('/api/world/novel/chapter/'+num);
+  if(!d.ok){toast(d.error||'章节不存在');return}
+  $('novelContent').innerHTML=`<div class="row" style="margin-bottom:10px"><button onclick="backToNovel()">← 返回列表</button><span style="font-size:14px;font-weight:700;flex:1;text-align:center">${escapeHtml(d.title)}</span></div><div class="novel-read">${escapeHtml(d.content)}</div>`;
+}
+function backToNovel(){loadNovel()}
+
+/* ---------- Tab / 弹窗 ---------- */
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id==='pane-'+name));
+  if(name==='novel')loadNovel();
+  if(name==='worldbook')loadWorldbook();
+  if(name==='stats')loadStats();
+  if(name==='decisions')renderDecisions();
+  if(name==='memory'||name==='entities')refreshAll();
+}
+function showPauseModal(d){
+  const last=d.results[d.results.length-1];
+  $('modalMsg').textContent=last.pauseMsg||'发生重大事件';
+  const opts=(last.events&&last.events[0]&&last.events[0].options)||[];
+  $('modalOptions').innerHTML=opts.length?opts.map((o,i)=>`<div style="padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px;cursor:pointer" onclick="closeModal()">${i+1}. ${escapeHtml(o)}</div>`).join(''):'';
+  $('modal').classList.add('show');
+}
+function closeModal(){$('modal').classList.remove('show')}
+function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'"')}
+let toastTimer=null;
+function toast(msg){
+  $('toast').textContent=msg;$('toast').style.display='block';
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').style.display='none',2600);
+}
+
+/* ---------- 启动 ---------- */
+refreshAll();
+setInterval(()=>{if(!document.hidden)refreshAll()},12000);
+</script>
+</body></html>
