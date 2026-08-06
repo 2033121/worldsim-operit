@@ -1534,10 +1534,13 @@ func (ws *worldServer) handleNovelGenerate(w http.ResponseWriter, r *http.Reques
 		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可写的章节"})
 		return
 	}
-	// 生成前清空旧章节（防上一轮残留/重复章号）
-	chDir := filepath.Join(inst.novelW.BookDir, "chapters")
-	os.RemoveAll(chDir)
-	os.MkdirAll(chDir, 0755)
+	// 生成前清空旧章节（防上一轮残留/重复章号）——仅强制重写（all=true）时清空；
+	// 逐章生成（max_chapters 递增）必须保留已写章节，靠 written 判定自动跳过
+	if req.All {
+		chDir := filepath.Join(inst.novelW.BookDir, "chapters")
+		os.RemoveAll(chDir)
+		os.MkdirAll(chDir, 0755)
+	}
 
 	// 统计已生成章节（按文件存在性）
 	written := map[int]bool{}
