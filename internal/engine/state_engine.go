@@ -22,29 +22,29 @@ import (
 // ---------- 世界状态（§3.2 schema） ----------
 
 type WorldState struct {
-	Revision   int                  `json:"revision"`
-	Day        int                  `json:"day"`
-	Time       string               `json:"time"`
-	Weather    string               `json:"weather"`
-	WorldLevel WorldLevel           `json:"world_level"`
-	Entities   map[string]Entity    `json:"entities"`
+	Revision   int               `json:"revision"`
+	Day        int               `json:"day"`
+	Time       string            `json:"time"`
+	Weather    string            `json:"weather"`
+	WorldLevel WorldLevel        `json:"world_level"`
+	Entities   map[string]Entity `json:"entities"`
 }
 type WorldLevel struct {
-	GlobalEvents   []string            `json:"global_events"`
-	Factions       map[string]Faction  `json:"factions"`
-	Locations      map[string]Location `json:"locations,omitempty"` // 地点系统（P0-2：状态会变）
-	Tension        float64             `json:"tension"`
-	TensionOverride *TensionOverride   `json:"tension_override,omitempty"`
+	GlobalEvents    []string            `json:"global_events"`
+	Factions        map[string]Faction  `json:"factions"`
+	Locations       map[string]Location `json:"locations,omitempty"` // 地点系统（P0-2：状态会变）
+	Tension         float64             `json:"tension"`
+	TensionOverride *TensionOverride    `json:"tension_override,omitempty"`
 }
 
 // Location 地点：有状态的场景对象（会随剧情变化）
 type Location struct {
 	Name     string `json:"name"`
-	Type     string `json:"type"`    // 城区/建筑/交通/自然/秘境
-	State    string `json:"state"`   // 正常/封禁/毁坏/繁荣/衰败/污染/新开放
-	Note     string `json:"note"`    // 地点记忆（发生过的变化）
+	Type     string `json:"type"`             // 城区/建筑/交通/自然/秘境
+	State    string `json:"state"`            // 正常/封禁/毁坏/繁荣/衰败/污染/新开放
+	Note     string `json:"note"`             // 地点记忆（发生过的变化）
 	Senses   string `json:"senses,omitempty"` // 感官档案：声音/气味/触感/光线（按本世界规则生成，写手写场景直接用）
-	SinceDay int    `json:"since_day"` // 登记日
+	SinceDay int    `json:"since_day"`        // 登记日
 }
 
 type TensionOverride struct {
@@ -55,9 +55,9 @@ type TensionOverride struct {
 }
 
 type Faction struct {
-	Visibility   string   `json:"visibility"` // public | hidden
-	Stance       string   `json:"stance"`
-	Power        float64  `json:"power"`
+	Visibility    string   `json:"visibility"` // public | hidden
+	Stance        string   `json:"stance"`
+	Power         float64  `json:"power"`
 	RecentActions []string `json:"recent_actions"`
 }
 
@@ -78,8 +78,8 @@ type Entity struct {
 // ---------- 状态变更提案（§1.1） ----------
 
 type Change struct {
-	Path  string `json:"path"`            // e.g. "entities.protagonist.money"
-	Op    string `json:"op"`              // add | set | del
+	Path  string `json:"path"` // e.g. "entities.protagonist.money"
+	Op    string `json:"op"`   // add | set | del
 	Value any    `json:"value,omitempty"`
 }
 

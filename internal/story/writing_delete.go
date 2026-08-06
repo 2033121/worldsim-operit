@@ -3,9 +3,9 @@ package story
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"worldsim/internal/fsutil"
 	"worldsim/internal/i18n"
-	"strings"
 )
 
 var (

@@ -1,7 +1,8 @@
 // Package health 提供运行检测与自动修复：
-//   ① /api/health —— 服务存活 + LLM 连通 + 世界推进健康度
-//   ② 自动修复 —— LLM 连续失败时切换降级策略、检测世界停滞、输出自愈报告
-//   ③ 心跳 —— 进程崩溃可被外部检测（重启看门狗）
+//
+//	① /api/health —— 服务存活 + LLM 连通 + 世界推进健康度
+//	② 自动修复 —— LLM 连续失败时切换降级策略、检测世界停滞、输出自愈报告
+//	③ 心跳 —— 进程崩溃可被外部检测（重启看门狗）
 package health
 
 import (
@@ -30,10 +31,16 @@ type Checker struct {
 	stuckThreshold int // 连续检查 N 次无推进视为停滞
 	stuckCount     int
 
+	// 自动修复冷却（避免问题持续时每轮刷屏）
+	lastHealAt time.Time
+
 	// 修复动作计数（报告用）
 	AutoHeals int64
 	LastHeal  string
 }
+
+// healCooldown 自动修复冷却期：触发一次后该时长内不再重复触发
+const healCooldown = 2 * time.Minute
 
 // New 创建健康检查器
 func New(baseDir string) *Checker {
@@ -91,6 +98,7 @@ func SetAutoHealHandler(f func(reason string) string) {
 }
 
 // AutoHeal 自动修复：读健康指标，发现问题触发修复
+// 冷却：触发一次后 healCooldown 内不再重复触发（问题持续时不再每轮刷屏）
 func (c *Checker) AutoHeal() {
 	m := logx.M()
 	ok, reason := m.Healthy()
@@ -103,12 +111,13 @@ func (c *Checker) AutoHeal() {
 	}
 	c.mu.Lock()
 	c.stuckCount++
-	c.mu.Unlock()
-
-	// 连续多次不健康才触发修复（避免抖动）
-	if c.stuckCount < 2 {
+	// 冷却期内的重复不健康不再触发（抖动保护：连续2次 + 冷却保护：2分钟内不重复）
+	if c.stuckCount < 2 || time.Since(c.lastHealAt) < healCooldown {
+		c.mu.Unlock()
 		return
 	}
+	c.mu.Unlock()
+
 	// 触发修复
 	healMu.Lock()
 	fn := healHandler
@@ -120,7 +129,8 @@ func (c *Checker) AutoHeal() {
 	c.mu.Lock()
 	c.AutoHeals++
 	c.LastHeal = fmt.Sprintf("%s → %s", time.Now().Format("15:04:05"), result)
-	c.stuckCount = 0 // 修复后重置，观察是否恢复
+	c.lastHealAt = time.Now() // 记录冷却起点
+	c.stuckCount = 0          // 修复后重置，观察是否恢复
 	c.mu.Unlock()
 	logx.Get(c.BaseDir).Warn("自愈", "触发自动修复：%s → %s", reason, result)
 }
@@ -133,16 +143,16 @@ func (c *Checker) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	healthy, reason := m.Healthy()
 	metrics := m.Snapshot()
 	resp := map[string]any{
-		"ok":          healthy,
-		"reason":      reason,
-		"time":        time.Now().Format("2006-01-02 15:04:05"),
-		"pid":         os.Getpid(),
-		"uptime_sec":  time.Now().Unix() - c.startTime,
-		"heartbeat":   c.lastBeat,
-		"metrics":     metrics,
-		"auto_heals":  c.AutoHeals,
-		"last_heal":   c.LastHeal,
-		"worlds_dir":  c.WorldsDir,
+		"ok":         healthy,
+		"reason":     reason,
+		"time":       time.Now().Format("2006-01-02 15:04:05"),
+		"pid":        os.Getpid(),
+		"uptime_sec": time.Now().Unix() - c.startTime,
+		"heartbeat":  c.lastBeat,
+		"metrics":    metrics,
+		"auto_heals": c.AutoHeals,
+		"last_heal":  c.LastHeal,
+		"worlds_dir": c.WorldsDir,
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if !healthy {

@@ -3,10 +3,10 @@ package story
 import (
 	"fmt"
 	"regexp"
-	"worldsim/internal/config"
-	"worldsim/internal/i18n"
 	"strings"
 	"unicode/utf8"
+	"worldsim/internal/config"
+	"worldsim/internal/i18n"
 )
 
 const outlineGenMaxAttempts = 2

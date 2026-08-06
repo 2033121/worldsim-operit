@@ -3,9 +3,9 @@ package sse
 import (
 	"encoding/json"
 	"fmt"
-	"worldsim/internal/i18n"
 	"sync"
 	"time"
+	"worldsim/internal/i18n"
 )
 
 type SSEMessage struct {

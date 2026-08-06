@@ -10,11 +10,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"worldsim/internal/config"
 	"worldsim/internal/i18n"
 	"worldsim/internal/llm"
 	"worldsim/internal/sse"
-	"strings"
 )
 
 // —— helpers ——

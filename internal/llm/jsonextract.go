@@ -53,3 +53,27 @@ func ExtractJSON(content string) string {
 	}
 	return content[start : start+end]
 }
+
+// ExtractJSONObjects 提取内容中所有独立的 JSON 对象（string-aware 深度匹配）。
+// 用于 LLM 输出格式不完美时的容错：数组里夹字符串/坏元素、对象间缺逗号、夹杂散文等情况，
+// 逐个提取 {...} 后由调用方拼数组解析。找不到任何对象返回空切片。
+func ExtractJSONObjects(content string) []string {
+	var out []string
+	start := -1
+	depth := 0
+	WalkJSONStructure(content, func(i int, c byte) {
+		if c == '{' {
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		} else if c == '}' {
+			depth--
+			if depth == 0 && start >= 0 {
+				out = append(out, content[start:i+1])
+				start = -1
+			}
+		}
+	})
+	return out
+}

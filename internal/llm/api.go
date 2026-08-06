@@ -4,19 +4,49 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
-
 	"worldsim/internal/config"
 	"worldsim/internal/logx"
 	"worldsim/internal/sse"
 )
+
+// newHTTPClient 构建 HTTP 客户端。
+// 关键：禁用 HTTP/2 和连接复用——Android/proot 环境的网络栈对 HTTP/2 长连接支持有 bug
+// （表现为 read tcp ... software caused connection abort），HTTP/1.1 + 每次新建连接最稳。
+// 另：必须显式设置 Dial/TLS/ResponseHeader 各阶段超时——Go 默认无这些超时，挂起时会无限等
+// （网络栈丢包时 TCP 连接可能卡几分钟，直到上层 context 超时）。各阶段短超时让失败快速暴露。
+func newHTTPClient(timeout time.Duration) *http.Client {
+	tr := &http.Transport{
+		// 禁用 HTTP/2（ALPN 不协商 h2），走 HTTP/1.1——Android proot 下 h2 长连接会被 abort
+		TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
+		// 禁用连接池：每次请求新建 TCP 连接（中转站响应快，连接开销可忽略；避免复用挂掉的连接）
+		DisableKeepAlives:   true,
+		MaxIdleConns:        0,
+		MaxIdleConnsPerHost: 0,
+		ForceAttemptHTTP2:   false,
+		// 各阶段硬超时：TCP 连接 10s、TLS 握手 10s（连接阶段快速失败，防 proot 网络栈挂起）
+		// 等响应头 300s：推理模型（deepseek-v4-flash-0731）处理大 prompt（事件生成 30KB+）时
+		// 思考 6000+ tokens 需要 150-250s 才输出第一个字节，超时太短会误杀正常请求。
+		// 网络层挂起由上层 context（CompleteTierTimeout）控制总时长，这里给生成留足空间。
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 300 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	return &http.Client{Timeout: timeout, Transport: tr}
+}
 
 type ChatRequest struct {
 	Model         string         `json:"model"`
@@ -24,6 +54,10 @@ type ChatRequest struct {
 	Stream        bool           `json:"stream,omitempty"`
 	StreamOptions *streamOptions `json:"stream_options,omitempty"`
 	MaxTokens     int            `json:"max_tokens,omitempty"`
+	// ReasoningEffort 推理深度控制：""（默认）| "low"（低，省 reasoning token/提速）。
+	// 事件生成这类"需要输出稳定 JSON、但思考太重"的场景用 low——completion 可省 50%+，
+	// 且输出更干净（默认档常带 ```json 包裹，需额外剥离）。复杂多目标规划保持默认。
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
 // llmSem 全局 LLM 并发闸门：所有 HTTP 调用（流式/同步）共用，
@@ -35,13 +69,13 @@ type streamOptions struct {
 }
 
 type tokenUsage struct {
-	PromptTokens          int `json:"prompt_tokens"`
-	CompletionTokens      int `json:"completion_tokens"`
-	TotalTokens           int `json:"total_tokens"`
-	PromptTokensDetails   *struct {
+	PromptTokens        int `json:"prompt_tokens"`
+	CompletionTokens    int `json:"completion_tokens"`
+	TotalTokens         int `json:"total_tokens"`
+	PromptTokensDetails *struct {
 		CachedTokens int `json:"cached_tokens"`
 	} `json:"prompt_tokens_details,omitempty"`
-	PromptCacheHitTokens int `json:"prompt_cache_hit_tokens,omitempty"`
+	PromptCacheHitTokens  int `json:"prompt_cache_hit_tokens,omitempty"`
 	PromptCacheMissTokens int `json:"prompt_cache_miss_tokens,omitempty"`
 }
 
@@ -94,9 +128,9 @@ type ChatResponse struct {
 
 // CompletionResult is the normalized result of a chat completion call.
 type CompletionResult struct {
-	Content           string
-	ReasoningContent  string // 推理模型的思考过程（若有，正文之外另存，不混入正文）
-	FinishReason      string // e.g. "stop", "length"
+	Content          string
+	ReasoningContent string // 推理模型的思考过程（若有，正文之外另存，不混入正文）
+	FinishReason     string // e.g. "stop", "length"
 }
 
 func hasAPIVersionSegment(u string) bool {
@@ -169,7 +203,7 @@ func FetchModelContextWindow(apiCfg *config.APIConfig) int {
 		req.Header.Set("Authorization", "Bearer "+apiCfg.APIKey)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newHTTPClient(10 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0
@@ -301,6 +335,7 @@ func CallAPIMessages(ctx context.Context, apiCfg *config.APIConfig, messages []M
 	syncResult, syncErr := CallAPIMessagesSync(ctx, apiCfg, messages)
 	return syncResult.Content, syncErr
 }
+
 // CallAPIMessagesSync 同步 HTTP 调用（仅作流式失败时的回退）。
 func CallAPIMessagesSync(ctx context.Context, apiCfg *config.APIConfig, messages []Message) (res CompletionResult, err error) {
 	llmSem <- struct{}{} // 全局并发闸门（与流式共用）
@@ -314,16 +349,20 @@ func CallAPIMessagesSync(ctx context.Context, apiCfg *config.APIConfig, messages
 		RecordSpan(ctx, apiCfg.Model, lastUsage, countMessageRunes(messages), utf8.RuneCountInString(res.Content), err)
 	}()
 
-
 	reqBody := ChatRequest{
-		Model:     apiCfg.Model,
-		Messages:  messages,
-		MaxTokens: apiCfg.MaxTokens,
+		Model:           apiCfg.Model,
+		Messages:        messages,
+		MaxTokens:       apiCfg.MaxTokens,
+		ReasoningEffort: apiCfg.ReasoningEffort,
 	}
 
 	bts, err := json.Marshal(reqBody)
 	if err != nil {
 		return CompletionResult{}, err
+	}
+	// 诊断：确认 reasoning_effort 是否生效（事件生成 low / 其他默认空）
+	if apiCfg.ReasoningEffort != "" {
+		fmt.Printf(" [LLM] reasoning_effort=%s model=%s prompt=%d字符\n", apiCfg.ReasoningEffort, apiCfg.Model, len(bts))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", fullURL, bytes.NewBuffer(bts))
@@ -337,8 +376,28 @@ func CallAPIMessagesSync(ctx context.Context, apiCfg *config.APIConfig, messages
 	}
 
 	timeout := time.Duration(apiCfg.HTTPTimeoutSeconds) * time.Second
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Do(req)
+	client := newHTTPClient(timeout)
+	// Do 用 goroutine + select 双保险：proot 环境下 Go net/http 的 writeLoop 可能在
+	// TCP 写死锁时卡死，context.WithTimeout 无法打断 syscall.Write（不可中断阻塞）。
+	// 这里在 timeout 到点后强制返回错误并关闭连接，避免请求无限卡死。
+	type doResult struct {
+		resp *http.Response
+		err  error
+	}
+	doCh := make(chan doResult, 1)
+	go func() {
+		resp, err := client.Do(req)
+		doCh <- doResult{resp: resp, err: err}
+	}()
+	var resp *http.Response
+	select {
+	case r := <-doCh:
+		resp, err = r.resp, r.err
+	case <-time.After(timeout + 5*time.Second):
+		return CompletionResult{}, fmt.Errorf("API 请求超时（client.Do 卡死 %ds 强制中断）：写循环死锁", int(timeout.Seconds()))
+	case <-ctx.Done():
+		return CompletionResult{}, fmt.Errorf("API 请求上下文取消：%v", ctx.Err())
+	}
 	if err != nil {
 		return CompletionResult{}, err
 	}
@@ -479,11 +538,12 @@ func CallAPIStreamMessages(ctx context.Context, apiCfg *config.APIConfig, messag
 	}()
 
 	reqBody := ChatRequest{
-		Model:         apiCfg.Model,
-		Messages:      messages,
-		Stream:        true,
-		StreamOptions: &streamOptions{IncludeUsage: true},
-		MaxTokens:     apiCfg.MaxTokens,
+		Model:           apiCfg.Model,
+		Messages:        messages,
+		Stream:          true,
+		StreamOptions:   &streamOptions{IncludeUsage: true},
+		MaxTokens:       apiCfg.MaxTokens,
+		ReasoningEffort: apiCfg.ReasoningEffort,
 	}
 
 	bts, err := json.Marshal(reqBody)
@@ -502,7 +562,7 @@ func CallAPIStreamMessages(ctx context.Context, apiCfg *config.APIConfig, messag
 	}
 
 	timeout := time.Duration(apiCfg.HTTPTimeoutSeconds) * time.Second
-	client := &http.Client{Timeout: timeout}
+	client := newHTTPClient(timeout)
 	resp, err := client.Do(req)
 	if err != nil {
 		return CompletionResult{}, err
@@ -559,21 +619,21 @@ func CallAPIStreamMessages(ctx context.Context, apiCfg *config.APIConfig, messag
 	if result == "" {
 		return CompletionResult{}, fmt.Errorf("流式响应为空")
 	}
-		if streamUsage != nil {
-			if tracker != nil {
-				tracker.finishCall(streamUsage.PromptTokens, streamUsage.CompletionTokens, true, messages, result)
-			}
-			// 前缀缓存统计（流式，独立于 tracker）
-			cached := 0
-			if streamUsage.PromptTokensDetails != nil {
-				cached = streamUsage.PromptTokensDetails.CachedTokens
-			}
-			if streamUsage.PromptCacheHitTokens > cached {
-				cached = streamUsage.PromptCacheHitTokens
-			}
-			RecordCacheUsage(cached, streamUsage.PromptTokens-cached)
-		} else if tracker != nil {
-			tracker.finishCall(0, 0, false, messages, result)
+	if streamUsage != nil {
+		if tracker != nil {
+			tracker.finishCall(streamUsage.PromptTokens, streamUsage.CompletionTokens, true, messages, result)
 		}
+		// 前缀缓存统计（流式，独立于 tracker）
+		cached := 0
+		if streamUsage.PromptTokensDetails != nil {
+			cached = streamUsage.PromptTokensDetails.CachedTokens
+		}
+		if streamUsage.PromptCacheHitTokens > cached {
+			cached = streamUsage.PromptCacheHitTokens
+		}
+		RecordCacheUsage(cached, streamUsage.PromptTokens-cached)
+	} else if tracker != nil {
+		tracker.finishCall(0, 0, false, messages, result)
+	}
 	return CompletionResult{Content: result, FinishReason: finishReason}, nil
 }

@@ -40,7 +40,7 @@ func (s *Simulator) NPCRespond(ctx context.Context, npcName, npcMemory, scene st
 	user := fmt.Sprintf("你的记忆：\n%s\n\n当前场景：%s\n你看到主角（{HERO}）来了。请自然地、按你的性格说一句话。", npcMemory, scene)
 	user = strings.ReplaceAll(user, "{HERO}", s.heroName)
 
-	raw, err := s.llm.CompleteTier(ctx, "fast", system, user)
+	raw, err := s.llm.CompleteTier(ctx, "fast:low", system, user)
 	if err != nil {
 		return DialogueTurn{}, err
 	}
@@ -80,7 +80,7 @@ func HeroRespondLLM(ctx context.Context, c *LLMClient, hero, heroProfile, npcSpe
 	// 对方说了什么 = 动态，放 user（system 前缀稳定）
 	user := fmt.Sprintf("你正在和面前的人对话，对方说：\"%s\"\n请用你的身份与性格自然地回应一句话。", npcSpeech)
 
-	raw, err := c.CompleteTier(ctx, "fast", system, user)
+	raw, err := c.CompleteTier(ctx, "fast:low", system, user)
 	if err != nil {
 		return DialogueTurn{}, err
 	}
@@ -126,7 +126,7 @@ NPC：{npc}，人格档案（言行必须符合，保持一致性）：
 	system = strings.ReplaceAll(system, "{HERO}", s.heroName)
 	system = strings.ReplaceAll(system, "{heroProfile}", heroProfile)
 	user := fmt.Sprintf("NPC 记忆：\n%s\n\n当前场景：%s", npcMemory, scene)
-	raw, err := s.llm.CompleteTier(ctx, "fast", system, user)
+	raw, err := s.llm.CompleteTier(ctx, "fast:low", system, user)
 	if err != nil {
 		return nil, err
 	}

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"worldsim/internal/fsutil"
 	"strconv"
 	"strings"
+	"worldsim/internal/fsutil"
 )
 
 type Character struct {

@@ -1,8 +1,8 @@
 package story
 
 import (
-	"worldsim/internal/i18n"
 	"testing"
+	"worldsim/internal/i18n"
 )
 
 func TestStripChapterMetaProse(t *testing.T) {

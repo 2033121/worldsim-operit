@@ -54,13 +54,13 @@ func RelStatusLabel(affinity, trust float64) string {
 
 // RelationshipView 某角色视角下的一段关系（用于查询/展示）
 type RelationshipView struct {
-	Other     string   `json:"other"`
-	Affinity  float64  `json:"affinity"`  // 好感 -1~1（负=厌恶）
-	Trust     float64  `json:"trust"`     // 信任 0~1
-	Status    string   `json:"status"`    // 关系状态
-	SinceDay  int      `json:"since_day"` // 初遇日
-	Events    []string `json:"events"`    // 关系大事记
-	Role      string   `json:"role"`      // 对方在剧情中的角色定位
+	Other    string   `json:"other"`
+	Affinity float64  `json:"affinity"`  // 好感 -1~1（负=厌恶）
+	Trust    float64  `json:"trust"`     // 信任 0~1
+	Status   string   `json:"status"`    // 关系状态
+	SinceDay int      `json:"since_day"` // 初遇日
+	Events   []string `json:"events"`    // 关系大事记
+	Role     string   `json:"role"`      // 对方在剧情中的角色定位
 }
 
 // ---------- 关系读写（走 State Engine 提案，引擎是唯一事实源） ----------
@@ -180,12 +180,12 @@ func (s *Simulator) DecayRelations(hero string, everyNDays int) []engine.Change 
 // NewCharacter 事件引入的新角色
 type NewCharacter struct {
 	Name     string `json:"name"`
-	Gender   string `json:"gender"`   // 男/女/未知
-	Identity string `json:"identity"` // 职业/身份
-	Persona  string `json:"persona"`  // 一句话人设（性格/背景）
-	Location string `json:"location"` // 首次出场地点
+	Gender   string `json:"gender"`    // 男/女/未知
+	Identity string `json:"identity"`  // 职业/身份
+	Persona  string `json:"persona"`   // 一句话人设（性格/背景）
+	Location string `json:"location"`  // 首次出场地点
 	RoleHint string `json:"role_hint"` // 剧情定位建议：love_interest(潜在女主)/important_npc/rival/npc
-	Tier     string `json:"tier"`     // 配角层级：core=核心(建档+记忆) | support=重要(轻量) | walkon=龙套(不建档不记忆)
+	Tier     string `json:"tier"`      // 配角层级：core=核心(建档+记忆) | support=重要(轻量) | walkon=龙套(不建档不记忆)
 }
 
 // RegisterCharacter 注册新角色实体（谁登场由世界决定，是否成为女主由互动决定）
@@ -197,6 +197,14 @@ func (s *Simulator) RegisterCharacter(c NewCharacter) []engine.Change {
 	// 已存在则跳过
 	if _, ok := s.engine.State().Entities[c.Name]; ok {
 		return nil
+	}
+	// 防重复：去掉名字里的括号注释后匹配（"周伯（周济）"→"周伯"，避免同一角色两种写法注册成两个实体）
+	if base := stripNameNotes(c.Name); base != c.Name {
+		for existing := range s.engine.State().Entities {
+			if stripNameNotes(existing) == base {
+				return nil // 已有同名本体，复用不重复注册
+			}
+		}
 	}
 	tier := strings.TrimSpace(c.Tier)
 	if tier == "" {
@@ -237,6 +245,18 @@ func (s *Simulator) RegisterCharacter(c NewCharacter) []engine.Change {
 	changes = append(changes, engine.Change{Path: "entities." + s.heroName + ".relationship." + c.Name, Op: "set", Value: 0.08})
 	changes = append(changes, engine.Change{Path: "entities." + s.heroName + ".extra.rel_since_" + c.Name, Op: "set", Value: s.day})
 	return changes
+}
+
+// stripNameNotes 去掉名字里的括号注释（中文全角/英文半角都处理）：
+// "周伯（周济）" → "周伯"；"李铁匠(老李)" → "李铁匠"。
+// 用于角色注册判重——同一角色不同写法（带注释 vs 不带）不应注册成两个实体。
+func stripNameNotes(name string) string {
+	for _, open := range []string{"（", "("} {
+		if i := strings.Index(name, open); i >= 0 {
+			name = strings.TrimSpace(name[:i])
+		}
+	}
+	return name
 }
 
 // ---------- 角色生命周期（"只见过几年"：到点离开/远去/死亡） ----------

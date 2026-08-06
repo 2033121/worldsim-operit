@@ -125,20 +125,20 @@ type Metrics struct {
 	mu sync.Mutex
 
 	// LLM 调用
-	LLMCalls      int64   // 总调用次数
-	LLMFailures   int64   // 失败次数
-	LLMDryRuns    int64   // dry-run 兜底次数（事件生成失败走模板）
-	LLMTotalMS    int64   // 累计耗时(ms)
-	LLMLastErr    string  // 最近一次错误
-	LLMLastErrDay int     // 最近一次错误发生日
-	LLMConsecFail int     // 连续失败次数（自动修复用）
+	LLMCalls      int64  // 总调用次数
+	LLMFailures   int64  // 失败次数
+	LLMDryRuns    int64  // dry-run 兜底次数（事件生成失败走模板）
+	LLMTotalMS    int64  // 累计耗时(ms)
+	LLMLastErr    string // 最近一次错误
+	LLMLastErrDay int    // 最近一次错误发生日
+	LLMConsecFail int    // 连续失败次数（自动修复用）
 
 	// 世界推进
-	LastSimDay   int     // 最近成功推进到的 day
-	LastSimOK    bool    // 最近一次模拟是否成功（非 dry-run）
-	EventGenOK   int64   // 事件生成成功次数
-	EventGenFail int64   // 事件生成失败次数
-	StartTime    int64   // 进程启动时间戳
+	LastSimDay   int   // 最近成功推进到的 day
+	LastSimOK    bool  // 最近一次模拟是否成功（非 dry-run）
+	EventGenOK   int64 // 事件生成成功次数
+	EventGenFail int64 // 事件生成失败次数
+	StartTime    int64 // 进程启动时间戳
 }
 
 var metrics = &Metrics{StartTime: time.Now().Unix()}
@@ -147,6 +147,9 @@ var metrics = &Metrics{StartTime: time.Now().Unix()}
 func M() *Metrics { return metrics }
 
 // RecordLLM 记录一次 LLM 调用结果
+// 注意：只统计 LLM 层健康度（成功率/耗时/连续失败），不更新 LastSimOK——
+// LastSimOK 语义是"最近一次模拟循环是否成功（事件生成是否成功推进）"，
+// 只能由 RecordEvent 设置，避免辅助调用（NPC对话/记忆巩固等）失败被误报成"世界推进 dry-run"。
 func (m *Metrics) RecordLLM(ok bool, ms int64, day int, errMsg string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -154,13 +157,11 @@ func (m *Metrics) RecordLLM(ok bool, ms int64, day int, errMsg string) {
 	m.LLMTotalMS += ms
 	if ok {
 		m.LLMConsecFail = 0
-		m.LastSimOK = true
 	} else {
 		m.LLMFailures++
 		m.LLMConsecFail++
 		m.LLMLastErr = errMsg
 		m.LLMLastErrDay = day
-		m.LastSimOK = false
 	}
 }
 
@@ -173,10 +174,11 @@ func (m *Metrics) RecordDryRun(day int) {
 	m.LastSimDay = day
 }
 
-// RecordEvent 记录事件生成结果
+// RecordEvent 记录事件生成结果（LastSimOK 的唯一更新点：事件生成成功=模拟成功推进）
 func (m *Metrics) RecordEvent(ok bool, day int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.LastSimOK = ok
 	if ok {
 		m.EventGenOK++
 		m.LastSimDay = day
@@ -201,30 +203,32 @@ func (m *Metrics) Snapshot() map[string]any {
 		rate = float64(m.LLMCalls-m.LLMFailures) / float64(m.LLMCalls) * 100
 	}
 	return map[string]any{
-		"llm_calls":         m.LLMCalls,
-		"llm_failures":      m.LLMFailures,
-		"llm_success_rate":  round1(rate),
-		"llm_dry_runs":      m.LLMDryRuns,
-		"llm_avg_ms":        avg(m.LLMTotalMS, m.LLMCalls),
-		"llm_last_err":      m.LLMLastErr,
-		"llm_consec_fail":   m.LLMConsecFail,
-		"event_gen_ok":      m.EventGenOK,
-		"event_gen_fail":    m.EventGenFail,
-		"last_sim_day":      m.LastSimDay,
-		"last_sim_ok":       m.LastSimOK,
-		"uptime_seconds":    time.Now().Unix() - m.StartTime,
+		"llm_calls":        m.LLMCalls,
+		"llm_failures":     m.LLMFailures,
+		"llm_success_rate": round1(rate),
+		"llm_dry_runs":     m.LLMDryRuns,
+		"llm_avg_ms":       avg(m.LLMTotalMS, m.LLMCalls),
+		"llm_last_err":     m.LLMLastErr,
+		"llm_consec_fail":  m.LLMConsecFail,
+		"event_gen_ok":     m.EventGenOK,
+		"event_gen_fail":   m.EventGenFail,
+		"last_sim_day":     m.LastSimDay,
+		"last_sim_ok":      m.LastSimOK,
+		"uptime_seconds":   time.Now().Unix() - m.StartTime,
 	}
 }
 
-// Healthy 判断整体健康度：连续 LLM 失败 > 5 或最近 3 次模拟全 dry-run 视为不健康
+// Healthy 判断整体健康度：连续 LLM 失败 > 5 或最近一次事件生成失败（模拟未推进）视为不健康
 func (m *Metrics) Healthy() (bool, string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.LLMConsecFail >= 5 {
 		return false, fmt.Sprintf("LLM 连续失败 %d 次（最近：%s）", m.LLMConsecFail, m.LLMLastErr)
 	}
-	if m.LLMCalls > 0 && m.LastSimDay > 0 && !m.LastSimOK {
-		return false, "最近一次世界推进走 dry-run 兜底"
+	// LastSimOK 由 RecordEvent 维护（事件生成成功=模拟成功推进），
+	// 只在这里判断，NPC对话/记忆巩固等辅助调用失败不会误报成"世界推进 dry-run"
+	if (m.EventGenOK+m.EventGenFail > 0) && m.LastSimDay > 0 && !m.LastSimOK {
+		return false, fmt.Sprintf("最近一次事件生成失败（Day%d 模拟未推进），最近 LLM 错误：%s", m.LastSimDay+1, m.LLMLastErr)
 	}
 	return true, "正常"
 }

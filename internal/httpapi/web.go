@@ -12,13 +12,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
+	"strings"
+	"time"
 	"worldsim/internal/config"
 	"worldsim/internal/i18n"
 	"worldsim/internal/sse"
 	"worldsim/internal/story"
-	"sort"
-	"strings"
-	"time"
 )
 
 // StartWebServer wires all routes and blocks serving HTTP. staticFiles must
@@ -266,11 +266,9 @@ func (h *Handlers) PostProject(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(req.Name)
 	lang := i18n.NormalizeLanguage(req.Language)
 
-	for _, c := range name {
-		if c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|' {
-			h.writeErrorReq(w, r, http.StatusBadRequest, "project_name_invalid_chars")
-			return
-		}
+	if !validProjectName(name) {
+		h.writeErrorReq(w, r, http.StatusBadRequest, "project_name_invalid_chars")
+		return
 	}
 
 	projectDir := filepath.Join(h.storysDir(), name)
@@ -333,6 +331,20 @@ func (h *Handlers) PostProjectSelect(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"name": h.projectName})
 }
 
+// validProjectName 校验项目名：拒绝路径分隔符/非法字符/相对路径（防目录穿越）。
+// 与 PostProject 的历史校验逻辑一致，DeleteProject/GetProject 等所有用 name 拼路径的入口统一走这里。
+func validProjectName(name string) bool {
+	if strings.TrimSpace(name) == "" || name == "." || name == ".." {
+		return false
+	}
+	for _, c := range name {
+		if c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|' || c == 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func (h *Handlers) DeleteProject(w http.ResponseWriter, r *http.Request) {
 	if h.isTaskRunning() {
 		h.writeErrorReq(w, r, http.StatusConflict, "delete_project_locked")
@@ -344,6 +356,13 @@ func (h *Handlers) DeleteProject(w http.ResponseWriter, r *http.Request) {
 		h.writeErrorReq(w, r, http.StatusBadRequest, "missing_project_name")
 		return
 	}
+	// 安全：项目名只允许单层目录名，拒绝 ../、绝对路径等穿越写法
+	if !validProjectName(name) {
+		h.writeErrorReq(w, r, http.StatusBadRequest, "project_name_invalid_chars")
+		return
+	}
+	// 双保险：只取最末段（即使 PathValue 解码出分隔符也不越界）
+	name = filepath.Base(name)
 
 	h.projectMu.RLock()
 	currentProject := h.projectName

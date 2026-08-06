@@ -26,10 +26,31 @@ func (s *Simulator) SetMode(m string) {
 }
 
 // decideMode 根据张力自适应选择粒度（§5 表格）：
-//   tension≥0.5 → Scene；0.3~0.5 → Summary；<0.3 连续3天 → Skip
+//
+//	tension≥0.5 → Scene；0.3~0.5 → Summary；<0.3 连续3天 → Skip
+//
+// 开篇保障期（前 openingDays 天）：强制 Scene，张力不足也保底——小说开篇必须有张力
 func (s *Simulator) decideMode(ctx context.Context) {
 	t := s.engine.State().WorldLevel.Tension
 	old := s.mode
+	// 开篇保障期：直接 Scene，且把张力抬到下限（让事件 Agent 知道现在要出大戏）
+	if s.inOpening() {
+		if t < s.openingTension {
+			t = s.openingTension
+			s.engine.State().WorldLevel.Tension = t
+		}
+		s.mode = "scene"
+		s.lowTensionDays = 0
+		if s.mode != old {
+			s.chronicle = append(s.chronicle, ChronicleEntry{
+				Day: s.day, Kind: "STATE", Time: now(),
+				Content:    fmt.Sprintf("开篇保障期：强制 Scene（张力保底 %.2f）——开篇必须有张力", t),
+				Visibility: "public", Source: "系统",
+				Weight: 0.15, Tags: []string{"张力"},
+			})
+		}
+		return
+	}
 	switch {
 	case t >= 0.5:
 		s.mode = "scene"
@@ -50,8 +71,8 @@ func (s *Simulator) decideMode(ctx context.Context) {
 			Day: s.day, Kind: "STATE", Time: now(),
 			Content:    fmt.Sprintf("张力引擎：模式 %s → %s（张力 %.2f）", old, s.mode, t),
 			Visibility: "public", Source: "系统",
-		
-			Weight: 0.15, Tags: []string{"张力"},})
+
+			Weight: 0.15, Tags: []string{"张力"}})
 	}
 }
 
@@ -127,8 +148,8 @@ func (s *Simulator) runSkip(ctx context.Context, res *DayResult) (*DayResult, er
 		Day: s.day, Kind: "FACT", Time: now(),
 		Content:    summary,
 		Visibility: "public", Source: "快进",
-	
-	Weight: 0.5, Tags: []string{"快进"},})
+
+		Weight: 0.5, Tags: []string{"快进"}})
 	res.Events = nil
 	res.Chronicle = append(res.Chronicle, s.chronicle[len(s.chronicle)-1])
 
@@ -145,7 +166,7 @@ func (s *Simulator) runSkip(ctx context.Context, res *DayResult) (*DayResult, er
 func (s *Simulator) skipSummaryLLM(ctx context.Context, plan *ProtagonistPlan, startDay, endDay int) (string, []engine.Change, bool) {
 	ctx = llm.WithSpan(ctx, "快进摘要")
 	planJSON, _ := json.Marshal(plan)
-	stateJSON := compactState(s.engine.State()) // 精简版状态（省 token）
+	stateJSON := compactState(s.engine.State(), s.heroName) // 精简版状态（省 token）
 	system := `你是世界Agent。世界正在快进（Skip模式）：主角按"默认策略"生活，你不替主角做大决定。
 规则：
 1. 输出严格 JSON：{"summary":"DayX-Y 概况（60字内，交代必须的关键变化：天气/事件/势力动向）","state_changes":[{"path":"...","op":"add|set","value":<数值>}],"interrupt":false}
@@ -172,19 +193,26 @@ func (s *Simulator) skipSummaryLLM(ctx context.Context, plan *ProtagonistPlan, s
 	return strings.TrimSpace(resp.Summary), resp.StateChanges, resp.Interrupt
 }
 
-// runSummaryDay Summary 轻模拟一天（事件用轻事件、主角走简化决策，省 2-3 次 LLM）
+// runSummaryDay Summary 轻模拟一天（事件走真实 LLM 但轻量，主角走简化决策，省 LLM 次数）
+// 原则：不用 dry-run 模板糊弄——事件生成失败就停止，等 LLM 恢复
 func (s *Simulator) runSummaryDay(ctx context.Context, res *DayResult) (*DayResult, error) {
-	// 轻事件（dry-run 池：1 个低severity事件，不调 LLM）
-	s.events = s.dryRunEvents()
-	if len(s.events) > 1 {
-		s.events = s.events[:1]
+	// 轻事件：真实 LLM 生成（1 个低severity事件即可；失败→返回错误中止）
+	if s.llm != nil {
+		evs, err := EventGenLLM(ctx, s.llm, s.engine.State(), s.heroName, s.wb, s.OpenForeshadows(), formatPendingEvents(s, s.day), "", "", "今日无特殊幸运倾向", s.lastDramaDay, s.currentArc, "")
+		if err != nil {
+			return res, fmt.Errorf("Day%d Summary 事件生成失败：%v", s.day, err)
+		}
+		if len(evs) > 1 {
+			evs = evs[:1]
+		}
+		s.events = evs
 	}
 	// 主角简化决策：dry-run（不调 LLM）
 	action := s.protagonistAct(s.events)
 	// 世界推进照常（世界 Agent 或 dry-run）
 	var advance *engine.Proposal
 	if s.llm != nil {
-		if a, err := WorldAdvanceLLM(ctx, s.llm, s.engine.State(), s.events, engine.Rules{}, s.wb, s.OpenForeshadows(), s.currentArc); err == nil {
+		if a, err := WorldAdvanceLLM(ctx, s.llm, s.engine.State(), s.heroName, s.events, engine.Rules{}, s.wb, s.OpenForeshadows(), s.currentArc); err == nil {
 			advance = a
 		}
 	}

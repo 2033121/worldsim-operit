@@ -20,17 +20,19 @@ import (
 type MemoryEntry struct {
 	Day        int     `json:"day"`
 	Time       string  `json:"time"`
-	Actor      string  `json:"actor"`   // 谁的记忆
-	Content    string  `json:"content"` // 记忆内容（已转述为本人视角）
-	Kind       string  `json:"kind"`    // event | dialogue | state | reflection | plan
+	Actor      string  `json:"actor"`      // 谁的记忆
+	Content    string  `json:"content"`    // 记忆内容（已转述为本人视角）
+	Kind       string  `json:"kind"`       // event | dialogue | state | reflection | plan
 	Importance float64 `json:"importance"` // 0~1
 }
 
 // MemoryStore 全角色记忆库（每个角色独立记忆流，互不串通）
 // 三层记忆架构（防膨胀，参考 Mem0/MemGPT/Generative Agents）：
-//   Working 工作记忆：近30天完整记忆（活跃期，全量保留）
-//   Archive 存档记忆：更早记忆按月LLM摘要压缩（每月1-3条）
-//   Core    核心记忆：人设/身份/长期目标（存在 entities.extra，不占记忆库）
+//
+//	Working 工作记忆：近30天完整记忆（活跃期，全量保留）
+//	Archive 存档记忆：更早记忆按月LLM摘要压缩（每月1-3条）
+//	Core    核心记忆：人设/身份/长期目标（存在 entities.extra，不占记忆库）
+//
 // 压缩链：Working → 月度摘要 → 年度摘要 → 遗忘（超长期低重要）
 type MemoryStore struct {
 	memories map[string][]MemoryEntry // Working：近30天完整记忆
@@ -166,133 +168,6 @@ func scoreMemory(e MemoryEntry, qWords []string, now time.Time) float64 {
 	return score
 }
 
-// Consolidate 月度记忆压缩（防膨胀核心）：把 Working 中早于 cutoffDay 的记忆
-// 用 LLM 摘要成 1-3 条"第N月摘要"存入 Archive，并从 Working 移除。
-// 无 LLM 时用规则式保留（保留 importance 高的前几条）。
-func (ms *MemoryStore) Consolidate(actor string, cutoffDay int) {
-	if ms == nil {
-		return
-	}
-	old := ms.memories[actor]
-	var keep, toCompress []MemoryEntry
-	for _, e := range old {
-		if e.Day > 0 && e.Day < cutoffDay {
-			toCompress = append(toCompress, e)
-		} else {
-			keep = append(keep, e)
-		}
-	}
-	if len(toCompress) == 0 {
-		return
-	}
-	ms.memories[actor] = keep
-
-	// 该批记忆的月份范围（用于摘要标注）
-	minDay, maxDay := toCompress[0].Day, toCompress[0].Day
-	for _, e := range toCompress {
-		if e.Day < minDay {
-			minDay = e.Day
-		}
-		if e.Day > maxDay {
-			maxDay = e.Day
-		}
-	}
-	label := fmt.Sprintf("第%d月记忆摘要", (minDay-1)/30+1)
-
-	var summary string
-	if ms.llm != nil {
-		summary = ms.summarizeMemories(actor, toCompress)
-	}
-	if summary == "" {
-		// 规则式：保留 importance 最高的前3条
-		sort.Slice(toCompress, func(i, j int) bool { return toCompress[i].Importance > toCompress[j].Importance })
-		var parts []string
-		for i := 0; i < len(toCompress) && i < 3; i++ {
-			parts = append(parts, toCompress[i].Content)
-		}
-		summary = strings.Join(parts, "；")
-	}
-	entry := MemoryEntry{
-		Day: maxDay, Time: time.Now().Format("01-02 15:04"),
-		Actor: actor, Content: fmt.Sprintf("【%s】%s", label, summary),
-		Kind: "summary", Importance: 0.85,
-	}
-	ms.archive[actor] = append(ms.archive[actor], entry)
-
-	// Archive 超过 24 条（≈2年）→ 把最老的合并成年度摘要
-	if len(ms.archive[actor]) > 24 {
-		ms.yearlyConsolidate(actor)
-	}
-	fmt.Printf(" [记忆] %s：%d 条旧记忆压缩为摘要（Day %d-%d）\n", actor, len(toCompress), minDay, maxDay)
-}
-
-// summarizeMemories 用 LLM 提炼记忆摘要（保留因果关键：关系/伏笔/事件/教训）
-func (ms *MemoryStore) summarizeMemories(actor string, entries []MemoryEntry) string {
-	ctx := llm.WithSpan(context.Background(), "记忆摘要")
-	var sb strings.Builder
-	for _, e := range entries {
-		sb.WriteString(fmt.Sprintf("- Day%d [%s] %s\n", e.Day, e.Kind, e.Content))
-	}
-	system := `你是{actor}的"记忆整理者"。回顾这段时间的经历，提炼成 1-3 条"对未来依然重要的记忆"：
-- 重要的人际关系进展（和谁走近/疏远/决裂）
-- 未解决的事、未兑现的约定、埋下的隐患
-- 身份/工作/住处的重大变化
-- 学到的教训、形成的习惯或判断
-要求：用第一人称（"我"），每条不超过50字，输出严格 JSON：{"key_memories":["...","..."]}`
-	system = strings.ReplaceAll(system, "{actor}", actor)
-	raw, err := ms.llm.CompleteTier(ctx, "fast", system, sb.String())
-	if err != nil {
-		return ""
-	}
-	jsonStr := llm.ExtractJSON(raw)
-	if jsonStr == "" {
-		return ""
-	}
-	var resp struct {
-		KeyMemories []string `json:"key_memories"`
-	}
-	if json.Unmarshal([]byte(jsonStr), &resp) != nil {
-		return ""
-	}
-	var out []string
-	for _, m := range resp.KeyMemories {
-		m = strings.TrimSpace(m)
-		if m != "" {
-			out = append(out, m)
-		}
-	}
-	return strings.Join(out, "；")
-}
-
-// yearlyConsolidate 年度合并：24+条月度摘要 → 压缩成年度摘要
-func (ms *MemoryStore) yearlyConsolidate(actor string) {
-	arch := ms.archive[actor]
-	if len(arch) <= 12 {
-		return
-	}
-	// 取最早的12条合并成1条年度摘要
-	old := arch[:12]
-	rest := arch[12:]
-	firstDay := old[0].Day
-	lastDay := old[len(old)-1].Day
-	var parts []string
-	for _, e := range old {
-		parts = append(parts, e.Content)
-	}
-	merged := MemoryEntry{
-		Day: lastDay, Time: time.Now().Format("01-02 15:04"),
-		Actor: actor, Content: fmt.Sprintf("【第%d-第%d月综合记忆】%s", (firstDay-1)/30+1, (lastDay-1)/30+1, strings.Join(parts, "；")),
-		Kind: "summary", Importance: 0.9,
-	}
-	ms.archive[actor] = append([]MemoryEntry{merged}, rest...)
-	// 年度摘要超过 8 条（≈8年）→ 最老的降级为低重要（接近遗忘）
-	if len(ms.archive[actor]) > 8 {
-		n := len(ms.archive[actor])
-		ms.archive[actor][0].Importance = 0.3 // 最老一条几乎遗忘
-		_ = n
-	}
-}
-
 // Recent 取最近 N 条记忆（按时间）
 func (ms *MemoryStore) Recent(actor string, n int) []MemoryEntry {
 	if ms == nil {
@@ -407,7 +282,7 @@ func (ms *MemoryStore) BatchConsolidate(ctx context.Context, c *LLMClient, actor
 		}
 		sb.WriteString("\n")
 	}
-	raw, err := c.CompleteTier(ctx, "fast", "你是记忆整理员，严格按 JSON 格式输出。", sb.String())
+	raw, err := c.CompleteTier(ctx, "fast:low", "你是记忆整理员，严格按 JSON 格式输出。", sb.String())
 	results := map[string]string{}
 	if err == nil {
 		jsonStr := llm.ExtractJSON(raw)
@@ -469,7 +344,7 @@ func (ms *MemoryStore) BatchReflect(ctx context.Context, c *LLMClient, actors []
 		}
 		sb.WriteString("\n")
 	}
-	raw, err := c.CompleteTier(ctx, "fast", "你是心理洞察师，严格按 JSON 格式输出。", sb.String())
+	raw, err := c.CompleteTier(ctx, "fast:low", "你是心理洞察师，严格按 JSON 格式输出。", sb.String())
 	if err != nil {
 		return out
 	}
@@ -632,7 +507,7 @@ func (ms *MemoryStore) summarizeEntries(ctx context.Context, c *LLMClient, actor
 3. 用第一人称，每条不超过60字
 4. 输出严格 JSON：{"summary":["...","..."]}`
 	system = strings.ReplaceAll(system, "{actor}", actor)
-	raw, err := c.CompleteTier(ctx, "fast", system, sb.String())
+	raw, err := c.CompleteTier(ctx, "fast:low", system, sb.String())
 	if err != nil {
 		return ""
 	}

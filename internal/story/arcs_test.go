@@ -1,9 +1,9 @@
 package story
 
 import (
-	"worldsim/internal/i18n"
 	"strings"
 	"testing"
+	"worldsim/internal/i18n"
 )
 
 func TestAssignArcRanges(t *testing.T) {

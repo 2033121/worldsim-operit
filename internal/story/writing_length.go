@@ -3,12 +3,12 @@ package story
 import (
 	"context"
 	"fmt"
+	"strings"
 	"worldsim/internal/config"
 	"worldsim/internal/i18n"
 	"worldsim/internal/llm"
 	"worldsim/internal/prose"
 	"worldsim/internal/sse"
-	"strings"
 )
 
 const (

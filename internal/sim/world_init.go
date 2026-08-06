@@ -21,8 +21,8 @@ type WorldInitPlan struct {
 		Name     string         `json:"name"`
 		Location string         `json:"location"`
 		Job      string         `json:"job"`
-		Money    any            `json:"money"`  // 兼容字符串/数字（LLM可能输出"12"或"五枚银币"）
-		Health   any            `json:"health"` // 同上
+		Money    any            `json:"money"`   // 兼容字符串/数字（LLM可能输出"12"或"五枚银币"）
+		Health   any            `json:"health"`  // 同上
 		Profile  string         `json:"profile"` // 一句话现状（注入 extra.profile）
 		Memory   string         `json:"memory"`  // 初始记忆（他记得什么）
 		Stats    map[string]any `json:"stats"`   // 世界书驱动的动态属性集
@@ -99,7 +99,9 @@ func WorldInitPlanLLM(ctx context.Context, c *LLMClient, wb *worldbook.Worldbook
 func (p *WorldInitPlan) Changes(hero string) []engine.Change {
 	var ch []engine.Change
 	ch = append(ch,
-		engine.Change{Path: "world_level.tension", Op: "set", Value: 0.2},
+		// 开篇张力起步 0.55（小说开篇必须有张力）：配合开篇保障期（前 N 天强制 Scene）
+		// 让事件生成器从第一天就产出高 severity 事件——异常开局/冲突/钩子，不能平淡开场
+		engine.Change{Path: "world_level.tension", Op: "set", Value: 0.55},
 	)
 	// 主角
 	ch = append(ch,

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"worldsim/internal/config"
 	"worldsim/internal/fsutil"
 	"worldsim/internal/i18n"
 	"worldsim/internal/sse"
-	"strings"
 )
 
 var protectedStoryFields = []string{"type", "title", "writing_style", "writing_pov", "story_synopsis"}

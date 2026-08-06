@@ -1,9 +1,9 @@
 package agent
 
 import (
+	"testing"
 	"worldsim/internal/config"
 	"worldsim/internal/llm"
-	"testing"
 )
 
 func TestParseToolCallTruncatedJSONNoRepair(t *testing.T) {

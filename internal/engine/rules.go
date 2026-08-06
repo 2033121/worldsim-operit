@@ -13,9 +13,9 @@ import (
 // 可无缝切换，Rules 结构不变。
 
 type Rules struct {
-	NumericRules  []NumericRule   `json:"numeric_rules"`
-	Preconditions []Precondition  `json:"preconditions"`
-	Permissions   []Permission    `json:"permissions"`
+	NumericRules  []NumericRule       `json:"numeric_rules"`
+	Preconditions []Precondition      `json:"preconditions"`
+	Permissions   []Permission        `json:"permissions"`
 	Enums         map[string][]string `json:"enums"`
 }
 
@@ -31,7 +31,7 @@ type Precondition struct {
 }
 
 type Requirement struct {
-	Path   string `json:"path"`
+	Path   string  `json:"path"`
 	Equals *string `json:"equals,omitempty"`
 	Gte    *string `json:"gte,omitempty"` // 引用 changes[i].value 或常量
 }

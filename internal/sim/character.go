@@ -16,18 +16,19 @@ import (
 
 // CharacterSheet 完整人设卡（存 extra.persona_sheet，JSON字符串）
 type CharacterSheet struct {
-	Name      string   `json:"name"`
-	Role      string   `json:"role"` // protagonist | love_interest | important_npc | rival | npc（可演化）
-	Age       string   `json:"age"`
-	Identity  string   `json:"identity"`  // 职业/身份
-	Personality []string `json:"personality"` // 性格特质（3-5个）：谨慎/固执/热心/毒舌…
-	Habits    []string `json:"habits"`    // 习惯/小动作/口头禅（2-3个）
-	Social    []string `json:"social"`    // 社交/人脉/对谁什么态度（2-3条）
-	Behavior  []string `json:"behavior"`  // 行为方式/决策倾向（2-3条）
-	Thinking  []string `json:"thinking"`  // 思考方式/价值观/底层逻辑（2-3条）
-	Motives   []string `json:"motives"`   // 目标：短期+长期（2条）
-	Fears     []string `json:"fears"`     // 软肋/恐惧（1-2条）
-	Secret    string   `json:"secret"`    // 秘密（他自己知道，别人不知道）
+	Name        string         `json:"name"`
+	Role        string         `json:"role"` // protagonist | love_interest | important_npc | rival | npc（可演化）
+	Age         string         `json:"age"`
+	Identity    string         `json:"identity"`    // 职业/身份
+	Personality []string       `json:"personality"` // 性格特质（3-5个）：谨慎/固执/热心/毒舌…
+	Habits      []string       `json:"habits"`      // 习惯/小动作/口头禅（2-3个）
+	Social      []string       `json:"social"`      // 社交/人脉/对谁什么态度（2-3条）
+	Behavior    []string       `json:"behavior"`    // 行为方式/决策倾向（2-3条）
+	Thinking    []string       `json:"thinking"`    // 思考方式/价值观/底层逻辑（2-3条）
+	Motives     []string       `json:"motives"`     // 目标：短期+长期（2条）
+	Fears       []string       `json:"fears"`       // 软肋/恐惧（1-2条）
+	Secret      string         `json:"secret"`      // 秘密（他自己知道，别人不知道）
+	Stats       map[string]any `json:"stats,omitempty"` // 世界书驱动的能力值（境界/灵根/寿元…），建档时顺带生成
 }
 
 // SheetPrompt 生成可注入 prompt 的角色档案文本（让NPC言行有灵魂且一致）
@@ -70,7 +71,7 @@ func CharacterSheetLLM(ctx context.Context, c *LLMClient, name, identity, hint s
 角色：` + name + `（` + identity + `）
 线索：` + hint + `
 输出严格 JSON：
-{"name":"` + name + `","age":"大致年龄段","identity":"职业/身份","personality":["性格特质×4，具体可感"],"habits":["习惯/小动作/口头禅×2，具体可感"],"social":["社交关系×2，具体可感"],"behavior":["行为方式×2，具体可感"],"thinking":["思考方式×2，具体可感"],"motives":["目标×2，具体可感"],"fears":["软肋×1，具体可感"],"secret":"只有TA自己知道的秘密（一句话）"}
+{"name":"` + name + `","age":"大致年龄段","identity":"职业/身份","personality":["性格特质×4，具体可感"],"habits":["习惯/小动作/口头禅×2，具体可感"],"social":["社交关系×2，具体可感"],"behavior":["行为方式×2，具体可感"],"thinking":["思考方式×2，具体可感"],"motives":["目标×2，具体可感"],"fears":["软肋×1，具体可感"],"secret":"只有TA自己知道的秘密（一句话）","stats":{"<能力名>":<数值或短语>,...}}
 要求：
 1. 具体、可感、有矛盾感（人不是单面的），每个习惯/社交都要有画面感，禁止空泛形容词堆砌。
 2. **习惯/口头禅必须从TA的职业、时代背景、生活日常推导**——TA的日常职业动作、生活细节、时代特有的行为方式；至少1个"与主线无关的生活小碎片"（TA私下爱做的事、小癖好、日常routine），这是让人物像"活人"而不是"剧情NPC"的关键。
@@ -80,8 +81,9 @@ func CharacterSheetLLM(ctx context.Context, c *LLMClient, name, identity, hint s
    · 口头禅：一句反复出现的口头语，能体现性格
    · 专属反应：遇到特定情况时的个人化反应（紧张会笑的人/难过会吃东西的人/生气时反而安静的人）
    · 专属物件：随身携带、有故事的物件
-   以上四件套写进 habits/social/behavior 相应字段，必须与TA的身份和世界设定自洽，不得套用别的世界的现成符号。` + CharacterDesignSkills()
-	raw, err := c.CompleteTier(ctx, "fast", system, "请设计这张人设卡。")
+   以上四件套写进 habits/social/behavior 相应字段，必须与TA的身份和世界设定自洽，不得套用别的世界的现成符号。
+5. **stats 必须按下方世界背景里的力量体系/能力体系生成**（这是"属于这个世界"的能力状态栏）：属性名用世界书里规定的体系（从世界背景中提取），数值贴合TA的身份地位——凡人/小人物按普通人标准，强者才有高数值；没有超凡能力的人就标注为凡俗身份；属性名必须与世界书保持一致，绝不使用世界背景之外的力量体系词汇。` + CharacterDesignSkills()
+	raw, err := c.CompleteTierTimeout(ctx, "fast", system, "请设计这张人设卡。", 150)
 	if err != nil {
 		return nil
 	}
@@ -114,12 +116,23 @@ func (s *Simulator) BuildCharacterSheet(ctx context.Context, name string) []engi
 	if !ok {
 		return nil
 	}
-	// 已有完整档案（性格≥3条=LLM生成过）则跳过；兜底模板允许重试
+	// 已有档案（persona_sheet 存在）则跳过——不再要求"性格≥3条"完整度：
+	// 完整档案（LLM生成过）跳过；兜底档案也跳过（避免旧世界角色每天重建人设卡，7角色×30s=3.5分钟拖垮模拟）
+	// 兜底档案虽然粗糙，但写手能用；角色质量可后续手动补，不让"每天重建"成为常态开销
 	if raw, ok := ent.Extra["persona_sheet"].(string); ok && raw != "" {
 		var old CharacterSheet
-		if json.Unmarshal([]byte(raw), &old) == nil && len(old.Personality) >= 3 {
-			return nil
+		if json.Unmarshal([]byte(raw), &old) == nil && len(old.Name) > 0 {
+			// 兜底档案（性格不足3条）每 7 天补全一次：兼顾速度（不每天重建）与质量（有机会升级）
+			if len(old.Personality) >= 3 {
+				return nil
+			}
+			if daysSince, _ := ent.Extra["persona_attempt_day"].(int); daysSince > 0 && s.day-daysSince < 7 {
+				return nil
+			}
 		}
+	}
+	if attempted, _ := ent.Extra["persona_attempted"].(bool); attempted {
+		return nil // LLM 尝试过（失败走兜底）——不再重试，防止中转慢时每天 7 次角色卡调用拖垮模拟
 	}
 	identity, _ := ent.Extra["identity"].(string)
 	if identity == "" {
@@ -144,16 +157,30 @@ func (s *Simulator) BuildCharacterSheet(ctx context.Context, name string) []engi
 			Social:   []string{"认识主角，点头之交"},
 			Behavior: []string{"低调行事"},
 			Thinking: []string{"先观察再行动"}, Motives: []string{"过好自己的日子"},
-			Fears:    []string{"被卷进麻烦"}, Secret: "心里藏着一些没说出口的事",
+			Fears: []string{"被卷进麻烦"}, Secret: "心里藏着一些没说出口的事",
 		}
 	}
 	b, _ := json.Marshal(cs)
 	var changes []engine.Change
 	changes = append(changes,
 		engine.Change{Path: "entities." + name + ".extra.persona_sheet", Op: "set", Value: string(b)},
+		// 已尝试标记：无论 LLM 成功还是兜底，都标记——避免中转慢时每天反复调 LLM 生成角色卡
+		engine.Change{Path: "entities." + name + ".extra.persona_attempted", Op: "set", Value: true},
+		// 尝试日记录：兜底档案按此每 7 天补全一次（升级质量），完整档案不再动
+		engine.Change{Path: "entities." + name + ".extra.persona_attempt_day", Op: "set", Value: s.day},
 		// 注意：不覆盖 extra.role —— role 是系统标记（protagonist/npc），由初始化/注册管理，
 		// LLM 人设卡的 role 字段是空的，覆盖会把主角标记抹掉（曾导致重启后主角漂移）
 	)
+	// 顺带生成 stats（世界书驱动的"属于这个世界"的能力值）：
+	// 只补缺失的属性名，不覆盖已有的（已有可能是世界推进 Agent 按剧情写的最新值）
+	if len(cs.Stats) > 0 {
+		for k, v := range cs.Stats {
+			if _, exists := ent.Stats[k]; exists {
+				continue
+			}
+			changes = append(changes, engine.Change{Path: "entities." + name + ".stats." + k, Op: "set", Value: v})
+		}
+	}
 	return changes
 }
 

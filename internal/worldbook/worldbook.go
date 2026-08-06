@@ -13,27 +13,27 @@ import (
 )
 
 type Worldbook struct {
-	Title       string
-	A1Worldview string // 世界观（含隐藏真相部分）
-	A2Physics   string // 物理/超自然规则（L1）
-	A3Society   string // 社会结构（L2）
-	A4Geography string // 地理（L3）
-	A5Factions  string // 势力速览（明面部分）
-	A6GoalChain    string // 主角目标链（长期/阶段/即时，网文引擎）
-	A7PowerSys     string // 能力成长体系（等级/解锁/升级时刻，网文引擎）
-	A8Villain      string // 反派行动线（谁在动/怎么压迫，网文引擎）
-	A9GoldenFinger string // 金手指设计（稀缺性/代价性/成长性+展示五步，网文DNA）
-	A10PayoffRhythm string // 爽点循环规划（四类爽点交替+密度表+首次爽点时机，网文DNA）
+	Title             string
+	A1Worldview       string // 世界观（含隐藏真相部分）
+	A2Physics         string // 物理/超自然规则（L1）
+	A3Society         string // 社会结构（L2）
+	A4Geography       string // 地理（L3）
+	A5Factions        string // 势力速览（明面部分）
+	A6GoalChain       string // 主角目标链（长期/阶段/即时，网文引擎）
+	A7PowerSys        string // 能力成长体系（等级/解锁/升级时刻，网文引擎）
+	A8Villain         string // 反派行动线（谁在动/怎么压迫，网文引擎）
+	A9GoldenFinger    string // 金手指设计（稀缺性/代价性/成长性+展示五步，网文DNA）
+	A10PayoffRhythm   string // 爽点循环规划（四类爽点交替+密度表+首次爽点时机，网文DNA）
 	A11MapProgression string // 地图阶梯（2~4阶段+每阶段境界门槛+爽点重置，网文DNA）
-	A12FaceSlapCycle string // 打脸周期表（被压迫→打脸→展示 的周期安排，网文DNA）
-	B1Secrets   string // 世界秘密（L5）
-	B2EventPool string // 事件类型池（导演内部）
-	B3ArcPlan   string // 全书弧线建议（导演内部）
-	B4Foreshadows string // 隐藏伏笔清单（导演内部）
-	B5EventPool   string // 事件谱（本世界会发生的事，事件生成器的弹药库）
-	CNarrative  string // 叙事约束（小说化专属）
-	DSafety     string // 内容安全边界
-	Raw         string
+	A12FaceSlapCycle  string // 打脸周期表（被压迫→打脸→展示 的周期安排，网文DNA）
+	B1Secrets         string // 世界秘密（L5）
+	B2EventPool       string // 事件类型池（导演内部）
+	B3ArcPlan         string // 全书弧线建议（导演内部）
+	B4Foreshadows     string // 隐藏伏笔清单（导演内部）
+	B5EventPool       string // 事件谱（本世界会发生的事，事件生成器的弹药库）
+	CNarrative        string // 叙事约束（小说化专属）
+	DSafety           string // 内容安全边界
+	Raw               string
 	// 深层世界观层（E段：世界一开始就很大，随时间渐进揭示——冰山理论）
 	DeferredLayers []DeferredLayer
 	pendingMarker  string // 解析中的E段标题触发标记（临时）
@@ -114,22 +114,22 @@ func Parse(raw string) *Worldbook {
 		case "A4":
 			w.A4Geography = body
 		case "A5":
-		w.A5Factions = body
-	case "A6":
-		w.A6GoalChain = body
-	case "A7":
-		w.A7PowerSys = body
-	case "A8":
-		w.A8Villain = body
-	case "A9":
-		w.A9GoldenFinger = body
-	case "A10":
-		w.A10PayoffRhythm = body
-	case "A11":
-		w.A11MapProgression = body
-	case "A12":
-		w.A12FaceSlapCycle = body
-	case "B1":
+			w.A5Factions = body
+		case "A6":
+			w.A6GoalChain = body
+		case "A7":
+			w.A7PowerSys = body
+		case "A8":
+			w.A8Villain = body
+		case "A9":
+			w.A9GoldenFinger = body
+		case "A10":
+			w.A10PayoffRhythm = body
+		case "A11":
+			w.A11MapProgression = body
+		case "A12":
+			w.A12FaceSlapCycle = body
+		case "B1":
 			w.B1Secrets = body
 		case "B2":
 			w.B2EventPool = body
@@ -187,11 +187,11 @@ func Parse(raw string) *Worldbook {
 					if len(parts) > 1 {
 						head := parts[1]
 						if idx := strings.Index(head, "【"); idx >= 0 {
-						rest := head[idx:]
-						if end := strings.Index(rest, "】"); end > 0 {
-							eMarker = strings.TrimSpace(rest[len("【"):end])
+							rest := head[idx:]
+							if end := strings.Index(rest, "】"); end > 0 {
+								eMarker = strings.TrimSpace(rest[len("【"):end])
+							}
 						}
-					}
 					}
 					continue
 				}
@@ -395,26 +395,17 @@ func (w *Worldbook) ForGM() string {
 
 // ForEventAgent 事件 Agent 视角：A + 事件类型池 + 事件谱 + 网文DNA（本世界弹药库）
 func (w *Worldbook) ForEventAgent() string {
+	// 事件生成用设定：精简注入（A1 世界观 + A2 规则 + B2 事件池）——保证 system 前缀稳定（命中前缀缓存）
+	// 同时控制体积：0731 是推理模型，system 越大思考越久（40KB→思考200s+，7KB→30s 出正文）。
+	// 节奏/爽点/打脸等长篇设定由 GM 段落账本（arcPlan）传给事件 Agent，不需要世界书重复注入。
 	var sb strings.Builder
 	sb.WriteString("【世界背景与事件类型】\n")
 	sb.WriteString("A1 世界观：\n" + w.A1Worldview + "\n")
 	if w.A2Physics != "" {
 		sb.WriteString("A2 世界规则：\n" + w.A2Physics + "\n")
 	}
-	if w.A9GoldenFinger != "" {
-		sb.WriteString("A9 金手指设计（事件里要让金手指有存在感：展示/用法/代价/实战/升级，按当前阶段安排对应节奏）：\n" + w.A9GoldenFinger + "\n")
-	}
-	if w.A10PayoffRhythm != "" {
-		sb.WriteString("A10 爽点循环规划（事件要配合爽点节奏：连憋几天后必须安排释放，四类爽点交替别单一）：\n" + w.A10PayoffRhythm + "\n")
-	}
-	if w.A12FaceSlapCycle != "" {
-		sb.WriteString("A12 打脸周期表（有人看不起主角→主角碾压→围观震惊，按周期安排打脸事件）：\n" + w.A12FaceSlapCycle + "\n")
-	}
 	if w.B2EventPool != "" {
 		sb.WriteString("B2 事件类型池（你的弹药库）：\n" + w.B2EventPool + "\n")
-	}
-	if w.B5EventPool != "" {
-		sb.WriteString("B5 本世界事件谱（优先从这里挑事件，落到本世界的具体样子）：\n" + w.B5EventPool + "\n")
 	}
 	return sb.String()
 }

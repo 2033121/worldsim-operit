@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 	"worldsim/internal/config"
 	"worldsim/internal/i18n"
 	"worldsim/internal/llm"
 	"worldsim/internal/sse"
-	"strings"
-	"time"
 )
 
 type ForeshadowSuggestion struct {

@@ -83,6 +83,7 @@ label{font-size:11px;color:var(--text2);display:block;margin:6px 0 4px;letter-sp
 .entity{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;font-size:12.5px}
 .entity .en{font-weight:700;color:var(--text);font-size:13px}
 .entity .ed{color:var(--text2);font-size:11.5px;margin-top:3px;line-height:1.5}
+.entity .ed2{color:var(--accent);font-size:11px;margin-top:3px;line-height:1.5}
 .modal{position:fixed;inset:0;background:rgba(2,6,12,.75);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:200}
 .modal.show{display:flex}
 .modal-box{background:var(--bg2);border:1px solid rgba(56,189,248,.4);border-radius:16px;padding:26px;max-width:560px;width:92%;max-height:82vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
@@ -139,6 +140,7 @@ label{font-size:11px;color:var(--text2);display:block;margin:6px 0 4px;letter-sp
     <span style="font-size:12px;color:var(--text2)">🌐</span>
     <select id="worldSel" onchange="selectWorld(this.value)"></select>
     <button class="icon-btn" onclick="showCreateWorld()" title="新建世界">＋</button>
+    <button class="icon-btn" onclick="deleteWorld()" title="删除当前世界">🗑</button>
   </div>
   <div class="badges">
     <span class="badge">📅 Day <b id="badgeDay">-</b></span>
@@ -261,6 +263,7 @@ label{font-size:11px;color:var(--text2);display:block;margin:6px 0 4px;letter-sp
       <div class="tab-pane" id="pane-novel">
         <div class="row" style="margin-bottom:12px">
           <button class="primary" onclick="generateNovel()" id="btnNovel" style="flex:1">✨ 生成小说章节</button>
+          <button class="icon-btn" onclick="copyWholeBook()" title="复制全书">📋</button>
           <button class="icon-btn" onclick="loadNovel()">🔄</button>
         </div>
         <div id="novelContent"><div class="empty">还没有章节。<br>先跑几天模拟，再点「生成小说章节」</div></div>
@@ -372,6 +375,14 @@ async function selectWorld(name){
   const d=await j('/api/worlds/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({world:name})});
   if(d.ok){toast('已切换世界：'+name);refreshAll()}
   else toast(d.error||'切换失败');
+}
+async function deleteWorld(){
+  const name=$('worldSel').value;
+  if(!name){toast('没有可删除的世界');return}
+  if(!confirm('确定删除世界「'+name+'」？\n将删除该世界的全部数据（编年史/状态/快照/小说），不可恢复！'))return;
+  const d=await j('/api/worlds/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({world:name})});
+  if(d.ok){toast('世界已删除：'+name);await loadWorlds();refreshAll()}
+  else toast(d.error||'删除失败');
 }
 function showCreateWorld(){loadThemes();$('modalCreate').classList.add('show');setTimeout(()=>$('newWorldName').focus(),100)}
 async function loadThemes(){
@@ -561,9 +572,14 @@ function renderWorldState(st){
   html+=`<div class="kv"><span>🌦 天气</span><span>${escapeHtml(st.weather||'-')}</span></div>`;
   if(hero){
     html+=`<div class="kv"><span>🧍 主角</span><span>${escapeHtml(hero)} · ${escapeHtml(h.job||'-')}</span></div>`;
-    html+=`<div class="kv"><span>💰 金钱</span><span>¥${h.money??'-'}</span></div>`;
-    html+=`<div class="kv"><span>❤️ 健康</span><span>${h.health??'-'}</span></div>`;
     html+=`<div class="kv"><span>📍 位置</span><span>${escapeHtml(h.location||'-')}</span></div>`;
+    const sts=h.stats||{};
+    const stk=Object.keys(sts);
+    if(stk.length){
+      html+=`<div class="kv"><span>📊 属性</span><span>${stk.slice(0,6).map(k=>escapeHtml(k)+':'+escapeHtml(sts[k])).join(' · ')}${stk.length>6?' …':''}</span></div>`;
+    }
+    html+=`<div class="kv"><span>💰 金钱</span><span>${h.money??'-'}</span></div>`;
+    html+=`<div class="kv"><span>❤️ 健康</span><span>${h.health??'-'}</span></div>`;
   }
   $('worldState').innerHTML=html;
 }
@@ -602,7 +618,10 @@ function renderEntities(st){
   const keys=Object.keys(ents);
   $('entities').innerHTML=keys.length?keys.map(k=>{
     const e=ents[k];
-    return `<div class="entity"><div class="en">${escapeHtml(k)}</div><div class="ed">${escapeHtml(e.job||'')} · ${escapeHtml(e.location||'')}${e.health?' · 健康'+e.health:''}</div></div>`;
+    const sts=e.stats||{};
+    const stk=Object.keys(sts);
+    const statsTxt=stk.length?`<div class="ed2">${stk.slice(0,4).map(kk=>escapeHtml(kk)+':'+escapeHtml(sts[kk])).join(' · ')}${stk.length>4?' …':''}</div>`:'';
+    return `<div class="entity"><div class="en">${escapeHtml(k)}</div><div class="ed">${escapeHtml(e.job||'')} · ${escapeHtml(e.location||'')}${e.health?' · 健康'+e.health:''}</div>${statsTxt}</div>`;
   }).join(''):'<div class="empty">初始化后显示</div>';
 }
 function renderMemories(data){
@@ -678,7 +697,37 @@ async function generateNovel(){
 async function readChapter(num){
   const d=await j('/api/world/novel/chapter/'+num);
   if(!d.ok){toast(d.error||'章节不存在');return}
-  $('novelContent').innerHTML=`<div class="row" style="margin-bottom:10px"><button onclick="backToNovel()">← 返回列表</button><span style="font-size:14px;font-weight:700;flex:1;text-align:center">${escapeHtml(d.title)}</span></div><div class="novel-read">${escapeHtml(d.content)}</div>`;
+  window._curChapter={num:num,title:d.title,content:d.content};
+  $('novelContent').innerHTML=`<div class="row" style="margin-bottom:10px"><button onclick="backToNovel()">← 返回列表</button><span style="font-size:14px;font-weight:700;flex:1;text-align:center">${escapeHtml(d.title)}</span><button onclick="copyChapter()">📋 复制</button><button onclick="showRevise()">🛠 返修</button></div><div class="novel-read">${escapeHtml(d.content)}</div>`;
+}
+function copyChapter(){
+  if(!window._curChapter){toast('没有可复制的章节');return}
+  const t='第'+window._curChapter.num+'章 '+window._curChapter.title+'\n\n'+window._curChapter.content;
+  (navigator.clipboard?navigator.clipboard.writeText(t):copyFallback(t)).then(()=>toast('✅ 已复制第'+window._curChapter.num+'章')).catch(()=>toast('复制失败'));
+}
+function copyFallback(t){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);return Promise.resolve()}
+async function copyWholeBook(){
+  const d=await j('/api/world/novel');
+  const plans=(d.plans||[]).filter(p=>p.status==='done');
+  if(!plans.length){toast('没有已生成的章节');return}
+  let full='';
+  for(const p of plans){
+    const c=await j('/api/world/novel/chapter/'+p.num);
+    if(c&&c.ok)full+='第'+p.num+'章 '+c.title+'\n\n'+c.content+'\n\n';
+  }
+  (navigator.clipboard?navigator.clipboard.writeText(full):copyFallback(full)).then(()=>toast('✅ 已复制全书 '+plans.length+' 章')).catch(()=>toast('复制失败'));
+}
+function showRevise(){
+  if(!window._curChapter){toast('没有可返修的章节');return}
+  const o=prompt('输入返修意见（如：节奏太慢，开场直接进冲突；主角太被动，让他主动调查）：');
+  if(o===null||!o.trim())return;
+  reviseChapter(window._curChapter.num,o.trim());
+}
+async function reviseChapter(num,opinion){
+  toast('🛠 写手按意见返修中…');
+  const d=await j('/api/world/novel/revise',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({num,opinion})});
+  if(d.ok){toast('✅ 第'+num+'章已返修');readChapter(num)}
+  else toast('返修失败：'+(d.error||''));
 }
 function backToNovel(){loadNovel()}
 

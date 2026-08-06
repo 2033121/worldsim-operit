@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"worldsim/internal/fsutil"
 	"time"
+	"worldsim/internal/fsutil"
 )
 
 type ChatSession struct {

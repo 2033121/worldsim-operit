@@ -11,10 +11,10 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
-	"worldsim/internal/fsutil"
-	"worldsim/internal/prose"
 	"strings"
 	"sync"
+	"worldsim/internal/fsutil"
+	"worldsim/internal/prose"
 )
 
 // chapterFile is the on-disk shape of chapters/NNNNNN.json.

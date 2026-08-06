@@ -135,6 +135,7 @@ curl localhost:48091/api/world/novel/chapter/1
 - 部署二进制：`/sdcard/Download/Operit/plugins/worldsim/worldsim`（同时更新 `/tmp/worldsim_run/worldsim`）
 - 编译环境：sdcard 上 go build 报 RLock 错误，需在 `/tmp/wsbuild` 编译后拷贝
 - 进程启动：`setsid ... > /dev/null 2>&1 < /dev/null & disown` 防终端会话杀进程
+- 重启服务：`pkill -9 -f '/tmp/worldsim_run/worldsim'`（⚠️ 不要用 `pkill -f 'worldsim'` 宽匹配——会误杀长跑脚本/看门狗的子进程）
 - 一键推送：`bash push_operit.sh "提交说明"`（自动同步源码 → 增量提交 → 推送本仓库）
 
 ## 📂 目录说明

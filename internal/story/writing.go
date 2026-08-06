@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strings"
+	"time"
 	"worldsim/internal/config"
 	"worldsim/internal/i18n"
 	"worldsim/internal/llm"
 	"worldsim/internal/prose"
 	"worldsim/internal/sse"
-	"strings"
-	"time"
 )
 
 func preferUserValue(userVal, fallback string) string {

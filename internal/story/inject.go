@@ -2,8 +2,8 @@ package story
 
 import (
 	"fmt"
-	"worldsim/internal/i18n"
 	"strings"
+	"worldsim/internal/i18n"
 )
 
 // Helper functions that produce language-specific text fragments injected

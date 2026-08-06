@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"worldsim/internal/config"
 	"testing"
+	"worldsim/internal/config"
 )
 
 func TestDetectProjectCompatibility(t *testing.T) {

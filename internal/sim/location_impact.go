@@ -14,7 +14,7 @@ import (
 // ---------- P0-2 地点系统：会变化的世界 ----------
 
 // SeedLocations 初始化基础地点（从世界书/默认池），并为每个地点生成"感官档案"（按本世界规则）
-func (s *Simulator) SeedLocations() []engine.Change {
+func (s *Simulator) SeedLocations(ctx context.Context) []engine.Change {
 	st := s.engine.State()
 	if len(st.WorldLevel.Locations) > 0 {
 		return nil
@@ -36,7 +36,7 @@ func (s *Simulator) SeedLocations() []engine.Change {
 	}
 	// 感官档案：按本世界规则生成（贴合该世界的环境质感）
 	if s.llm != nil && s.wb != nil {
-		if senses := s.seedLocationSenses(defaults); len(senses) > 0 {
+		if senses := s.seedLocationSenses(ctx, defaults); len(senses) > 0 {
 			for name, sn := range senses {
 				changes = append(changes, engine.Change{Path: "world_level.locations." + name + ".senses", Op: "set", Value: sn})
 			}
@@ -46,7 +46,7 @@ func (s *Simulator) SeedLocations() []engine.Change {
 }
 
 // EnsureLocationSenses 为缺少感官档案的地点补生成（旧世界升级/新地点登记后用，按本世界规则）
-func (s *Simulator) EnsureLocationSenses() []engine.Change {
+func (s *Simulator) EnsureLocationSenses(ctx context.Context) []engine.Change {
 	st := s.engine.State()
 	if len(st.WorldLevel.Locations) == 0 || s.llm == nil || s.wb == nil {
 		return nil
@@ -60,7 +60,7 @@ func (s *Simulator) EnsureLocationSenses() []engine.Change {
 	if len(missing) == 0 {
 		return nil
 	}
-	if senses := s.seedLocationSenses(missing); len(senses) > 0 {
+	if senses := s.seedLocationSenses(ctx, missing); len(senses) > 0 {
 		var changes []engine.Change
 		for name, sn := range senses {
 			if sn != "" {
@@ -73,15 +73,15 @@ func (s *Simulator) EnsureLocationSenses() []engine.Change {
 }
 
 // seedLocationSenses 一次 LLM 调用为所有基础地点生成感官档案
-func (s *Simulator) seedLocationSenses(defaults []struct{ name, typ, note string }) map[string]string {
-	ctx := llm.WithSpan(context.Background(), "地点感官")
+func (s *Simulator) seedLocationSenses(ctx context.Context, defaults []struct{ name, typ, note string }) map[string]string {
+	ctx = llm.WithSpan(ctx, "地点感官")
 	var locList strings.Builder
 	for _, d := range defaults {
 		locList.WriteString(fmt.Sprintf("- %s【%s】%s\n", d.name, d.typ, d.note))
 	}
 	system := "你是场景感官设计师。为下面这些地点各写一段'感官档案'（100字内）：必须覆盖五维感官——视觉（看到什么，含反常细节）、听觉（环境声）、触觉（温度/质感/风）、嗅觉（气味，气味即情绪）、第六感（氛围直觉）。必须贴合本世界的时代与设定，具体可感，禁止空泛（如'环境舒适'）。输出严格 JSON：{\"地点名\":\"感官描述\"}"
 	user := fmt.Sprintf("世界背景：%s\n地点列表：\n%s", s.wb.ForWorldBrief(), locList.String())
-	raw, err := s.llm.CompleteTier(ctx, "fast", system, user)
+	raw, err := s.llm.CompleteTier(ctx, "fast:low", system, user)
 	if err != nil {
 		return nil
 	}
@@ -121,7 +121,7 @@ func (s *Simulator) ApplyLocationChanges(ctx context.Context, changes []engine.C
 func (s *Simulator) WorldImpactLLM(ctx context.Context, heroAction string) ([]engine.Change, string) {
 	ctx = llm.WithSpan(ctx, "世界影响")
 	st := s.engine.State()
-	stateJSON := compactState(st) // 精简版状态（省 token：不传 extra 大档案）
+	stateJSON := compactState(st, s.heroName) // 精简版状态（省 token：不传 extra 大档案）
 	system := `你是世界反应引擎。主角刚刚做了行动，评估它对世界的影响（蝴蝶效应）。
 规则：
 1. 输出严格 JSON：{"changes":[{"path":"world_level.global_events","op":"add","value":"..."},{"path":"world_level.locations.<地点>.state","op":"set","value":"..."},{"path":"world_level.factions.<势力>.power","op":"set","value":<0~1数值>}],"impact":"一句话总结影响（20字内）"}
@@ -129,7 +129,7 @@ func (s *Simulator) WorldImpactLLM(ctx context.Context, heroAction string) ([]en
 3. 影响要克制而真实：小行动有小涟漪，大行动才改势力格局；主角目前还是小人物，不会一夜改变世界
 4. 变化要能体现在后续事件里（封禁的地点、增强的势力、新的传闻）`
 	user := fmt.Sprintf("世界状态：\n%s\n主角行动：%s", stateJSON, heroAction)
-	raw, err := s.llm.CompleteTier(ctx, "fast", system, user)
+	raw, err := s.llm.CompleteTier(ctx, "fast:low", system, user)
 	if err != nil {
 		return nil, ""
 	}
@@ -199,12 +199,12 @@ func (s *Simulator) queuePendingEvents(day int, evs []EventCard) {
 // ---------- P1 伏笔账本（NeuroBook 理念：埋下/推进/酝酿/回收） ----------
 
 type Foreshadow struct {
-	Name      string  `json:"name"`
-	Planted   int     `json:"planted"`   // 埋设日
-	Status    string  `json:"status"`    // planted | progressing | resolved | abandoned
-	Progress  string  `json:"progress"`  // 当前进展（每次推进更新）
-	Resolved  int     `json:"resolved"`  // 回收日
-	Maturity  float64 `json:"maturity"`  // 酝酿度 0~1：铺垫期慢慢攒，到阈值自然爆发成戏剧事件
+	Name     string  `json:"name"`
+	Planted  int     `json:"planted"`  // 埋设日
+	Status   string  `json:"status"`   // planted | progressing | resolved | abandoned
+	Progress string  `json:"progress"` // 当前进展（每次推进更新）
+	Resolved int     `json:"resolved"` // 回收日
+	Maturity float64 `json:"maturity"` // 酝酿度 0~1：铺垫期慢慢攒，到阈值自然爆发成戏剧事件
 }
 
 // AdvanceForeshadowMaturity 酝酿度推进：铺垫 Agent 的"伏笔滋长"类铺垫调用
@@ -271,15 +271,33 @@ func (s *Simulator) RegisterDynamicAgent(name, typ, focus, state string) string 
 }
 
 // DynamicAgentsState 活跃动态负责人状态（注入事件/铺垫 Agent，让"部门"协同）
+// 上下文管理：只列近期更新过的负责人线（AgentActiveWindow 天内），沉睡线不注入防膨胀。
+const agentActiveWindow = 20 // 20天内更新过的视为活跃
+
 func (s *Simulator) DynamicAgentsState() string {
 	if len(s.dynamicAgents) == 0 {
 		return ""
 	}
 	var sb strings.Builder
 	for _, da := range s.dynamicAgents {
-		sb.WriteString(fmt.Sprintf("· %s【%s】：%s（下一步：%s）\n", da.Name, da.Type, da.Focus, da.State))
+		if s.day-da.UpdatedDay > agentActiveWindow {
+			continue // 沉睡线：跳过（不注入）
+		}
+		// 截断 focus/state 长文本（负责人线只需给事件 Agent 一个"方向感"，细节太长占 token）
+		focus := truncateCN(da.Focus, 80)
+		state := truncateCN(da.State, 60)
+		sb.WriteString(fmt.Sprintf("· %s【%s】：%s（下一步：%s）\n", da.Name, da.Type, focus, state))
 	}
 	return strings.TrimSpace(sb.String())
+}
+
+// truncateCN 按中文字符截断（len 是字节数，中文 3 字节/字，按 rune 截断更准）
+func truncateCN(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }
 
 // RegisterForeshadow 登记伏笔（事件 Agent 在事件里带 foreshadow 字段）
@@ -309,36 +327,127 @@ func (s *Simulator) AdvanceForeshadow(name, progress string) {
 	s.foreshadows[name] = f
 }
 
+// matchForeshadowKey 模糊匹配伏笔：Agent 填的 resolve 名（如"槐树的歌"）和注册名
+// （如"短·槐树的歌：颜承宗望见..."）通常不一致——精确匹配会漏标，导致剧情已回收
+// 但伏笔还挂在清单里占 token。这里去掉前缀（短·/中·/长·/短线·）+ 只比核心词：
+// 注册名的核心词被 Agent 名包含，或 Agent 名被注册名包含，即命中。
+func matchForeshadowKey(registered, agent string) bool {
+	if registered == agent {
+		return true
+	}
+	trim := func(s string) string {
+		s = strings.TrimSpace(s)
+		for _, p := range []string{"短·", "中·", "长·", "短线·", "中线·", "长线·"} {
+			s = strings.TrimPrefix(s, p)
+		}
+		// 去掉冒号后的详细描述（注册名常带长描述）
+		if i := strings.Index(s, "："); i > 0 {
+			s = s[:i]
+		}
+		if i := strings.Index(s, ":"); i > 0 {
+			s = s[:i]
+		}
+		return strings.TrimSpace(s)
+	}
+	rt, at := trim(registered), trim(agent)
+	if rt == "" || at == "" {
+		return false
+	}
+	return strings.Contains(rt, at) || strings.Contains(at, rt)
+}
+
 func (s *Simulator) ResolveForeshadow(name, progress string) {
-	if s.foreshadows == nil {
+	if s.foreshadows == nil || name == "" {
 		return
 	}
-	f, ok := s.foreshadows[name]
-	if !ok {
-		return
+	// 精确匹配优先；失败则模糊匹配（Agent 填的名字和注册名通常不完全一致）
+	// 注意：同名不同描述的变体（如"短·仓底心音"和"短·仓底心音：脉搏与槐歌错开..."）
+	// 剧情上是一回事——Agent 回收"仓底心音"时应把同核心词的所有变体都标记回收，
+	// 避免旧版本永远挂在清单里占 token（用户发现：剧情已兑现但未标记的伏笔）。
+	resolved := false
+	for registered, f := range s.foreshadows {
+		if f.Status == "resolved" || f.Status == "abandoned" {
+			continue
+		}
+		if matchForeshadowKey(registered, name) {
+			f.Status = "resolved"
+			f.Progress = fmt.Sprintf("Day%d·%s", s.day, progress)
+			f.Resolved = s.day
+			s.foreshadows[registered] = f
+			resolved = true
+			// 继续遍历：同核心词的其他变体一起回收
+		}
 	}
-	f.Status = "resolved"
-	f.Progress = fmt.Sprintf("Day%d·%s", s.day, progress)
-	f.Resolved = s.day
-	s.foreshadows[name] = f
+	_ = resolved
+}
+
+// shortNames 伏笔短名：只保留前缀+冒号前的核心名（如"短·槐树的歌"），
+// 去掉"：颜承宗望见..."的长描述——清单只提示"有哪些坑"，细节由记忆/编年史承载，
+// 避免伏笔越多名字越长、user 无限膨胀（30个长描述伏笔 ≈ 1.5KB，短名能砍掉一大半）。
+func shortNames(names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		s := n
+		if i := strings.Index(s, "："); i > 0 {
+			s = s[:i]
+		}
+		if i := strings.Index(s, ":"); i > 0 {
+			s = s[:i]
+		}
+		out = append(out, strings.TrimSpace(s))
+	}
+	return out
 }
 
 // OpenForeshadows 未回收伏笔清单（注入事件生成/小说写手，避免忘坑）
+// 上下文管理原则：长短线伏笔都要全程记住（长线贯穿全书，不能因"近期没动静"被遗忘），
+// 所以这里只做两件事：
+//  1. 排除已回收的（resolved/abandoned）——回收了就不再占上下文
+//  2. 按长线/中线/短线分组展示，让事件 Agent 清楚回收优先级（短线该尽快收、长线慢慢铺）
+//
+// 不按活跃度裁剪——那会导致长线伏笔被遗忘、烂尾。
 func (s *Simulator) OpenForeshadows() string {
 	if len(s.foreshadows) == 0 {
 		return ""
 	}
-	var names []string
+	var long, mid, short, other []string
 	for n, f := range s.foreshadows {
-		if f.Status == "planted" || f.Status == "progressing" {
-			names = append(names, n)
+		if f.Status == "resolved" || f.Status == "abandoned" {
+			continue // 已回收/已弃：不注入
+		}
+		switch {
+		case strings.HasPrefix(n, "长") || strings.HasPrefix(n, "长线"):
+			long = append(long, n)
+		case strings.HasPrefix(n, "中") || strings.HasPrefix(n, "中线"):
+			mid = append(mid, n)
+		case strings.HasPrefix(n, "短") || strings.HasPrefix(n, "短线"):
+			short = append(short, n)
+		default:
+			other = append(other, n)
 		}
 	}
-	sort.Strings(names)
-	if len(names) == 0 {
-		return ""
+	sort.Strings(long)
+	sort.Strings(mid)
+	sort.Strings(short)
+	sort.Strings(other)
+	var sb strings.Builder
+	if len(long) > 0 {
+		sb.WriteString("长线（跨度大，持续推进，大谜底浮出就收）：" + strings.Join(shortNames(long), "、") + "\n")
 	}
-	return strings.Join(names, "、")
+	if len(mid) > 0 {
+		sb.WriteString("中线（段落内展开，谜底全浮出再收）：" + strings.Join(shortNames(mid), "、") + "\n")
+	}
+	if len(short) > 0 {
+		sb.WriteString("短线（近期该回收，优先主动收）：" + strings.Join(shortNames(short), "、") + "\n")
+	}
+	if len(other) > 0 {
+		sb.WriteString("其他（未分类）：" + strings.Join(shortNames(other), "、") + "\n")
+	}
+	res := strings.TrimSpace(sb.String())
+	if res == "" {
+		return "（暂无未回收伏笔，可埋新坑）"
+	}
+	return res
 }
 
 // LocationSenses 所有地点的感官档案（供小说写手写场景用：先知道这个地点什么味/什么声/什么光）
@@ -402,6 +511,10 @@ func formatRecentEvents(chronicle []ChronicleEntry, n int) string {
 }
 
 // formatPendingEvents 把待触发的遭遇链种子格式化成提示
+// 上下文管理：只列未来 pendingWindow 天内的种子（更远的已编排好但暂不注入，
+// 到日子再由 consumePendingEvents 兑现——不注入不丢，避免长跑 token 膨胀）。
+const pendingWindow = 14
+
 func formatPendingEvents(s *Simulator, day int) string {
 	var sb strings.Builder
 	if len(s.pending) == 0 {
@@ -409,7 +522,7 @@ func formatPendingEvents(s *Simulator, day int) string {
 	}
 	days := make([]int, 0, len(s.pending))
 	for d := range s.pending {
-		if d > day {
+		if d > day && d <= day+pendingWindow {
 			days = append(days, d)
 		}
 	}

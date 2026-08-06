@@ -2,8 +2,9 @@
 // 魔改自 Nigh/show-me-the-story（Go 单二进制 + WebUI，零外部依赖）
 //
 // 双端口架构：
-//   :48090 小说创作服务（复用 show-me-the-story 的小说化流水线）
-//   :48091 世界模拟服务（WorldSim State Engine + 调度器，新增）
+//
+//	:48090 小说创作服务（复用 show-me-the-story 的小说化流水线）
+//	:48091 世界模拟服务（WorldSim State Engine + 调度器，新增）
 package main
 
 import (
@@ -27,6 +28,7 @@ import (
 	"worldsim/internal/httpapi"
 	"worldsim/internal/llm"
 	"worldsim/internal/logx"
+	"worldsim/internal/narrative"
 	"worldsim/internal/novel"
 	"worldsim/internal/sim"
 	"worldsim/internal/sse"
@@ -42,8 +44,8 @@ var wsWeb embed.FS
 var version = "dev"
 
 const (
-	storyPort  = ":48090" // 小说化服务（原项目功能）
-	worldPort  = ":48091" // 世界模拟服务（WorldSim 新增）
+	storyPort = ":48090" // 小说化服务（原项目功能）
+	worldPort = ":48091" // 世界模拟服务（WorldSim 新增）
 )
 
 func main() {
@@ -124,17 +126,17 @@ func resolveProgDir() string {
 
 // worldInstance 单个世界实例（独立数据目录：worlds/{名字}/）
 type worldInstance struct {
-	name    string
-	dir     string
-	engine  *engine.StateEngine
-	sim     *sim.Simulator
-	llm     *sim.LLMClient
-	wb      *worldbook.Worldbook
-	novelW  *novel.Writer
-	apiCfg  *config.APIConfig
-	heroName string // 主角名（小说写手必须用模拟主角名）
-	created bool // 是否已初始化世界状态（主角等）
-	lastDay *sim.DayResult // 最近一次模拟结果（手动跑天/后台循环都会更新，供"今日对话/事件"面板）
+	name     string
+	dir      string
+	engine   *engine.StateEngine
+	sim      *sim.Simulator
+	llm      *sim.LLMClient
+	wb       *worldbook.Worldbook
+	novelW   *novel.Writer
+	apiCfg   *config.APIConfig
+	heroName string         // 主角名（小说写手必须用模拟主角名）
+	created  bool           // 是否已初始化世界状态（主角等）
+	lastDay  *sim.DayResult // 最近一次模拟结果（手动跑天/后台循环都会更新，供"今日对话/事件"面板）
 }
 
 func (w *worldInstance) ready() bool { return w != nil && w.engine != nil }
@@ -147,6 +149,7 @@ func startWorldServer(worldDir string, apiCfg *config.APIConfig) {
 	mux.HandleFunc("GET /api/worlds", ws.handleWorldsList)
 	mux.HandleFunc("POST /api/worlds/select", ws.handleWorldSelect)
 	mux.HandleFunc("POST /api/worlds/create", ws.handleWorldCreate)
+	mux.HandleFunc("POST /api/worlds/delete", ws.handleWorldDelete)
 	mux.HandleFunc("GET /api/world/state", ws.handleGetState)
 	mux.HandleFunc("POST /api/world/proposal", ws.handleProposal)
 	mux.HandleFunc("POST /api/world/init", ws.handleInit)
@@ -162,8 +165,11 @@ func startWorldServer(worldDir string, apiCfg *config.APIConfig) {
 	mux.HandleFunc("GET /api/world/readiness", ws.handleReadiness)
 	mux.HandleFunc("GET /api/world/token_stats", ws.handleTokenStats)
 	mux.HandleFunc("POST /api/world/novel/generate", ws.handleNovelGenerate)
+	mux.HandleFunc("POST /api/world/novel/direction", ws.handleNovelDirection)
+	mux.HandleFunc("GET /api/world/novel/plan", ws.handleNovelPlan)
 	mux.HandleFunc("GET /api/world/novel", ws.handleNovelList)
 	mux.HandleFunc("GET /api/world/novel/chapter/{num}", ws.handleNovelChapter)
+	mux.HandleFunc("POST /api/world/novel/revise", ws.handleNovelRevise)
 
 	// 控制台：主题包列表 / 世界书 / 伏笔 / 后台循环
 	mux.HandleFunc("GET /api/worldbooks/themes", ws.handleThemesList)
@@ -205,17 +211,18 @@ func startWorldServer(worldDir string, apiCfg *config.APIConfig) {
 
 // 多世界：worldServer 持有世界实例池
 type worldServer struct {
-	baseDir string // worlds/
-	worlds  map[string]*worldInstance
-	current string // 当前世界名
-	apiCfg  *config.APIConfig
-	novelMu sync.Mutex // 小说生成防重入锁（并发请求会写重复章号）
+	baseDir  string // worlds/
+	worlds   map[string]*worldInstance
+	current  string // 当前世界名
+	apiCfg   *config.APIConfig
+	novelMu  sync.Mutex          // 小说生成防重入锁（并发请求会写重复章号）
+	novelDir narrative.Direction // 剧情方向（用户可配置，注入剧情引擎）
 
-	loopMu      sync.Mutex    // 后台持续运行控制
-	loopRunning bool          // 循环是否在跑
+	loopMu      sync.Mutex // 后台持续运行控制
+	loopRunning bool       // 循环是否在跑
 	loopCancel  context.CancelFunc
-	loopTarget  int           // 目标 day（世界时间）
-	loopWorld   string        // 循环绑定的世界名
+	loopTarget  int    // 目标 day（世界时间）
+	loopWorld   string // 循环绑定的世界名
 }
 
 // handleThemesList GET /api/worldbooks/themes — 主题包列表（建世界下拉用）
@@ -331,9 +338,11 @@ func (ws *worldServer) handleLoopSet(w http.ResponseWriter, r *http.Request) {
 			default:
 			}
 			if res, err := inst.sim.RunDay(ctx); err != nil {
-				// 单日失败不中断循环（中转站抖动/超时），但停一会儿再试
-				time.Sleep(1 * time.Second)
-				continue
+				// 单日失败：停止循环（用户原则：生成不了就停，不无限重试同一失败日）
+				// 之前是 sleep 1s continue 无限重试——事件生成 24KB 大请求失败时会造成
+				// 同一天反复空转 + 前端请求堆积，世界永远卡在失败那天。
+				fmt.Printf(" [模拟] Day%d 失败(%v)，停止循环等待（不无限重试）\n", inst.engine.State().Day+1, logx.Trunc(err.Error(), 120))
+				return
 			} else {
 				inst.lastDay = res // 供前端"今日对话/事件"面板
 			}
@@ -354,6 +363,10 @@ func (ws *worldServer) handleLoopSet(w http.ResponseWriter, r *http.Request) {
 					fmt.Printf(" [防空转] LLM 连续失败 %d 次，自动回退到最近健康快照（防止空转污染）\n", consecDryRun)
 					ws.autoRewindSafe(inst, "LLM连续失败自动回档")
 					consecDryRun = 0
+					// 回档后立即停止循环：LLM 连不上时继续跑只会再次失败→再次回档（恶性循环，世界永远不前进）。
+					// 等用户查看/LLM 恢复后手动重启循环。
+					fmt.Printf(" [防空转] 已暂停后台循环（LLM 连续失败），世界停在 Day%d，等 LLM 恢复后重新启动\n", inst.engine.State().Day)
+					return
 				}
 			} else {
 				consecDryRun = 0 // LLM 正常，重置计数
@@ -628,6 +641,10 @@ func (ws *worldServer) autoEnableLLM(w *worldInstance) {
 		Model:      ws.apiCfg.Model,
 		APIKey:     ws.apiCfg.APIKey,
 		ModelTiers: ws.apiCfg.ModelTiers,
+		// 关键：必须复制超时和 max_tokens——否则 HTTPTimeoutSeconds=0（无总超时）+
+		// MaxTokens=0（默认），proot 下请求写循环卡住时 Client.Timeout=0 无限等（真凶）
+		HTTPTimeoutSeconds: ws.apiCfg.HTTPTimeoutSeconds,
+		MaxTokens:          ws.apiCfg.MaxTokens,
 	}}
 	w.applyLLM()
 }
@@ -865,6 +882,13 @@ func (ws *worldServer) handleReplay(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/world/sim/day — 跑一天模拟（§5：mode 支持 auto/scene/summary/skip）
 func (ws *worldServer) handleSimDay(w http.ResponseWriter, r *http.Request) {
+	ws.loopMu.Lock()
+	if ws.loopRunning {
+		ws.loopMu.Unlock()
+		ws.writeJSON(w, 409, map[string]any{"ok": false, "error": "模拟循环已在运行（先等它完成或 stop），请勿并发请求", "running": true})
+		return
+	}
+	ws.loopMu.Unlock()
 	inst := ws.inst()
 	if inst == nil {
 		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可用世界，请先创建"})
@@ -909,12 +933,12 @@ func (ws *worldServer) handleSimDay(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ws.writeJSON(w, 200, map[string]any{
-		"ok":        true,
-		"results":   results,
-		"paused":    results[len(results)-1].Paused,
-		"revision":  inst.engine.State().Revision,
-		"day":       inst.engine.State().Day,
-		"cache":     llm.CacheStats(),
+		"ok":       true,
+		"results":  results,
+		"paused":   results[len(results)-1].Paused,
+		"revision": inst.engine.State().Revision,
+		"day":      inst.engine.State().Day,
+		"cache":    llm.CacheStats(),
 	})
 }
 
@@ -965,11 +989,11 @@ func (ws *worldServer) handleSetLLM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Mode        string            `json:"mode"` // mock | real | off
-		BaseURL     string            `json:"base_url"`
-		Model       string            `json:"model"`
-		APIKey      string            `json:"api_key"`
-		ModelTiers  map[string]string `json:"model_tiers"` // 模型分层：fast/normal/premium
+		Mode       string            `json:"mode"` // mock | real | off
+		BaseURL    string            `json:"base_url"`
+		Model      string            `json:"model"`
+		APIKey     string            `json:"api_key"`
+		ModelTiers map[string]string `json:"model_tiers"` // 模型分层：fast/normal/premium
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		ws.writeJSON(w, 400, map[string]string{"error": "请求解析失败: " + err.Error()})
@@ -1000,6 +1024,9 @@ func (ws *worldServer) handleSetLLM(w http.ResponseWriter, r *http.Request) {
 			Model:      req.Model,
 			APIKey:     req.APIKey,
 			ModelTiers: tiers,
+			// 复制超时/max_tokens（防 Client.Timeout=0 无限卡死，同 autoEnableLLM）
+			HTTPTimeoutSeconds: ws.apiCfg.HTTPTimeoutSeconds,
+			MaxTokens:          ws.apiCfg.MaxTokens,
 		}}
 		// 持久化到 api.json（重启后小说/模拟分层不丢）
 		if b, err := json.MarshalIndent(inst.llm.Cfg, "", "  "); err == nil {
@@ -1157,6 +1184,49 @@ func (ws *worldServer) handleWorldCreate(w http.ResponseWriter, r *http.Request)
 	ws.writeJSON(w, 200, map[string]any{"ok": true, "world": name, "current": ws.current})
 }
 
+// POST /api/worlds/delete — 删除世界（内存实例 + 磁盘目录）
+// body: {"world":"世界名"}
+func (ws *worldServer) handleWorldDelete(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		World string `json:"world"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.World == "" {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "需要 world 字段"})
+		return
+	}
+	if _, ok := ws.worlds[req.World]; !ok {
+		ws.writeJSON(w, 404, map[string]any{"ok": false, "error": "世界不存在: " + req.World})
+		return
+	}
+	// 停止该世界的后台循环（防止删除后还在跑）
+	if ws.loopRunning && ws.loopWorld == req.World {
+		if ws.loopCancel != nil {
+			ws.loopCancel()
+		}
+		ws.loopRunning = false
+	}
+	// 从内存移除
+	delete(ws.worlds, req.World)
+	// 删除磁盘目录（worlds/{世界}/）
+	worldDir := filepath.Join(ws.baseDir, req.World)
+	if err := os.RemoveAll(worldDir); err != nil {
+		ws.writeJSON(w, 500, map[string]any{"ok": false, "error": "删除目录失败: " + err.Error()})
+		return
+	}
+	// 若删除的是当前世界，切换到剩余第一个（或无）
+	if ws.current == req.World {
+		ws.current = ""
+		for n := range ws.worlds {
+			ws.current = n
+			break
+		}
+	}
+	// 小说产物目录同步清理（/sdcard/Download/WorldSim/小说/{世界}）
+	_ = os.RemoveAll(filepath.Join("/sdcard/Download", "WorldSim", "小说", req.World))
+	fmt.Printf(" [世界模拟] 世界已删除：%s\n", req.World)
+	ws.writeJSON(w, 200, map[string]any{"ok": true, "world": req.World, "current": ws.current})
+}
+
 // GET /api/world/memories — 查看当前世界角色记忆（§4.6）
 func (ws *worldServer) handleMemories(w http.ResponseWriter, r *http.Request) {
 	inst := ws.inst()
@@ -1170,7 +1240,7 @@ func (ws *worldServer) handleMemories(w http.ResponseWriter, r *http.Request) {
 	}
 	ms := inst.sim.MemoryStore()
 	type actorMem struct {
-		Actor   string           `json:"actor"`
+		Actor    string            `json:"actor"`
 		Memories []sim.MemoryEntry `json:"memories"`
 	}
 	var out []actorMem
@@ -1276,7 +1346,39 @@ func (ws *worldServer) handleNovelGenerate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	plans := inst.novelW.PlanChapters(chronicle, thinkings)
+	// 新流程：剧情引擎规划（分章→节拍→剧本→写手按剧本写）——优先使用
+	// 旧流程（无 arcBook 的旧世界）：PlanChapters 按事件密度分章（降级）
+	var plans []novel.ChapterPlan
+	var scriptsByChapter map[int]string = map[int]string{}
+	var charCardsByChapter map[int]string = map[int]string{}
+	if len(inst.sim.ArcBook()) > 0 {
+		in := ws.buildNarrativeInput(inst)
+		eng := narrative.NewEngine(in)
+		plan, nerr := eng.Run(r.Context())
+		if nerr == nil && len(plan.Units) > 0 {
+			for i := range plan.Units {
+				u := &plan.Units[i]
+				cp := novel.ChapterPlan{
+					Num:      u.Num,
+					Title:    u.Title,
+					DayStart: u.DayStart,
+					DayEnd:   u.DayEnd,
+					Days:     u.Days,
+					Status:   "pending",
+				}
+				plans = append(plans, cp)
+				if i < len(plan.Scripts) {
+					scriptsByChapter[u.Num] = narrative.FormatScripts(plan.Scripts[i])
+					// 角色状态卡：从剧本里收集登场角色
+					charCardsByChapter[u.Num] = charCardsText(plan.Scripts[i])
+				}
+			}
+		}
+	}
+	// 降级：无 arcBook 或剧情引擎失败 → 旧 PlanChapters
+	if len(plans) == 0 {
+		plans = inst.novelW.PlanChapters(chronicle, thinkings)
+	}
 	if len(plans) == 0 {
 		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可写的章节"})
 		return
@@ -1316,7 +1418,15 @@ func (ws *worldServer) handleNovelGenerate(w http.ResponseWriter, r *http.Reques
 		if inst.sim != nil {
 			inst.novelW.Decisions = sim.FormatDirections(inst.sim.DecisionsFor(p.DayStart, p.DayEnd))
 		}
-		if _, err := inst.novelW.WriteChapter(ctx, *p, chronicle, thinkings, entities); err != nil {
+		var err error
+		if scripts, ok := scriptsByChapter[p.Num]; ok && scripts != "" {
+			// 新流程：按剧情引擎的剧本写（场景目标/冲突/对话要点 + 角色状态卡）
+			_, err = inst.novelW.WriteFromScripts(ctx, *p, scripts, charCardsByChapter[p.Num], entities)
+		} else {
+			// 旧流程：直接翻译编年史（无剧本的降级路径）
+			_, err = inst.novelW.WriteChapter(ctx, *p, chronicle, thinkings, entities)
+		}
+		if err != nil {
 			ws.writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error(), "chapter": p.Num})
 			return
 		}
@@ -1339,6 +1449,65 @@ func (ws *worldServer) handleNovelGenerate(w http.ResponseWriter, r *http.Reques
 		"skipped": skipped,
 		"exports": exports,
 	})
+}
+
+// POST /api/world/novel/direction — 设置剧情方向（主线/爽点密度/文风/优先段落/章节上限）
+// body: {"main_line":"...","payoff_density":"low|normal|high","style_tilt":"...","focus_arcs":[1,2],"max_chapters":0}
+func (ws *worldServer) handleNovelDirection(w http.ResponseWriter, r *http.Request) {
+	var d narrative.Direction
+	_ = json.NewDecoder(r.Body).Decode(&d)
+	// 校验爽点密度
+	if d.PayoffDensity != "" && d.PayoffDensity != "low" && d.PayoffDensity != "normal" && d.PayoffDensity != "high" {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "payoff_density 必须是 low|normal|high"})
+		return
+	}
+	ws.novelDir = d
+	ws.writeJSON(w, 200, map[string]any{"ok": true, "direction": d})
+}
+
+// GET /api/world/novel/plan — 预览剧情引擎的分章方案（不生成正文，先看规划）
+// query: ?all=1 强制全量（忽略已生成章节）；返回章节方案 + 剧情方向
+func (ws *worldServer) handleNovelPlan(w http.ResponseWriter, r *http.Request) {
+	inst := ws.inst()
+	if inst == nil || inst.sim == nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可用世界，请先创建/选择"})
+		return
+	}
+	in := ws.buildNarrativeInput(inst)
+	eng := narrative.NewEngine(in)
+	plan, err := eng.RunPlanOnly(r.Context())
+	if err != nil {
+		ws.writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	ws.writeJSON(w, 200, map[string]any{
+		"ok":        true,
+		"direction": in.Direction,
+		"chapters":  plan.Units,
+		"preview":   narrative.PreviewText(plan),
+	})
+}
+
+// buildNarrativeInput 从当前世界实例组装剧情引擎输入。
+func (ws *worldServer) buildNarrativeInput(inst *worldInstance) *narrative.Input {
+	in := narrative.BuildInput(inst.sim, inst.engine.State().Entities, inst.wb, ws.novelDir)
+	in.LLM = ws.apiCfg
+	return in
+}
+
+// charCardsText 从场景剧本收集登场角色，输出角色状态卡文本（供写手注入）。
+func charCardsText(scripts []narrative.SceneScript) string {
+	seen := map[string]bool{}
+	var cards []narrative.CharacterCard
+	for _, sc := range scripts {
+		for _, c := range sc.Characters {
+			if !seen[c.Name] {
+				seen[c.Name] = true
+				cards = append(cards, c)
+			}
+		}
+	}
+	return narrative.FormatCharCards(cards)
 }
 
 // syncNovelToDownload 把小说文件夹复制到手机 Download（每个世界固定目录，方便用户直接取文件）
@@ -1463,4 +1632,62 @@ func (ws *worldServer) handleNovelChapter(w http.ResponseWriter, r *http.Request
 		}
 	}
 	ws.writeJSON(w, 404, map[string]any{"ok": false, "error": "章节不存在"})
+}
+
+// POST /api/world/novel/revise — 按返修意见重写一章
+// body: {"num":1,"opinion":"节奏太慢，改成直接冲突开场"}
+func (ws *worldServer) handleNovelRevise(w http.ResponseWriter, r *http.Request) {
+	inst := ws.inst()
+	if inst == nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可用世界，请先创建"})
+		return
+	}
+	var req struct {
+		Num     int    `json:"num"`
+		Opinion string `json:"opinion"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Num <= 0 {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "需要 num 字段"})
+		return
+	}
+	opinion := strings.TrimSpace(req.Opinion)
+	if opinion == "" {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "返修意见不能为空"})
+		return
+	}
+	// 读原章节
+	chaptersDir := filepath.Join(inst.novelW.BookDir, "chapters")
+	entries, err := os.ReadDir(chaptersDir)
+	if err != nil {
+		ws.writeJSON(w, 404, map[string]any{"ok": false, "error": "章节不存在"})
+		return
+	}
+	var oldContent, fname string
+	for _, e := range entries {
+		if len(e.Name()) >= 3 && e.Name()[0:3] == fmt.Sprintf("%03d", req.Num) {
+			data, rerr := os.ReadFile(filepath.Join(chaptersDir, e.Name()))
+			if rerr != nil {
+				ws.writeJSON(w, 500, map[string]any{"ok": false, "error": rerr.Error()})
+				return
+			}
+			oldContent = string(data)
+			fname = e.Name()
+			break
+		}
+	}
+	if oldContent == "" {
+		ws.writeJSON(w, 404, map[string]any{"ok": false, "error": "章节不存在（先生成再返修）"})
+		return
+	}
+	p := novel.ChapterPlan{Num: req.Num, Title: strings.TrimSuffix(fname[4:], ".md"), Status: "pending"}
+	ws.novelMu.Lock()
+	body, rerr := inst.novelW.ReviseChapter(r.Context(), p, opinion, oldContent)
+	ws.novelMu.Unlock()
+	if rerr != nil {
+		ws.writeJSON(w, 500, map[string]any{"ok": false, "error": rerr.Error()})
+		return
+	}
+	// 同步到手机可见目录
+	syncNovelToDownload(inst.name, inst.novelW.BookDir)
+	ws.writeJSON(w, 200, map[string]any{"ok": true, "num": req.Num, "content": body})
 }

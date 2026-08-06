@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 	"worldsim/internal/agent"
 	"worldsim/internal/config"
 	"worldsim/internal/fsutil"
@@ -16,9 +19,6 @@ import (
 	"worldsim/internal/prose"
 	"worldsim/internal/sse"
 	"worldsim/internal/story"
-	"strings"
-	"sync"
-	"time"
 )
 
 type Handlers struct {
@@ -89,6 +89,10 @@ func (h *Handlers) projectDir() string {
 
 // switchProject loads all project-specific data for the given project name.
 func (h *Handlers) switchProject(name string) error {
+	// 安全：项目名只允许单层目录名（防目录穿越切换到任意目录）
+	if !validProjectName(name) {
+		return fmt.Errorf("非法项目名: %s", name)
+	}
 	h.projectMu.Lock()
 	defer h.projectMu.Unlock()
 

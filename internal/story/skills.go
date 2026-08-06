@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"worldsim/internal/config"
 	"worldsim/internal/i18n"
-	"strings"
 )
 
 //go:embed embeds/skills

@@ -1,9 +1,9 @@
 package story
 
 import (
-	"worldsim/internal/prose"
 	"strings"
 	"testing"
+	"worldsim/internal/prose"
 )
 
 func TestCalcChapterLengthRange(t *testing.T) {

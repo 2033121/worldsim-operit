@@ -2,10 +2,10 @@ package llm
 
 import (
 	"context"
-	"worldsim/internal/sse"
 	"sync"
 	"time"
 	"unicode/utf8"
+	"worldsim/internal/sse"
 )
 
 type taskTokenCtxKey struct{}
