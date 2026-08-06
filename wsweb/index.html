@@ -130,96 +130,6 @@ label{font-size:11px;color:var(--text2);display:block;margin:6px 0 4px;letter-sp
 .stat-row span:first-child{color:var(--text2)}
 .stat-row span:last-child{color:var(--text);font-weight:600}
 .fs-view{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:14px;white-space:pre-wrap;font-size:12.5px;line-height:1.7;color:#e8c987;max-height:60vh;overflow-y:auto}
-/* ---------- 🎮 玩家模式（Phase2 机制层） ---------- */
-.ps-hero{display:flex;gap:14px;align-items:center;padding:16px;background:linear-gradient(135deg,rgba(56,189,248,.10),rgba(129,140,248,.06));border:1px solid rgba(56,189,248,.28);border-radius:14px;margin-bottom:12px;position:relative;overflow:hidden}
-.ps-hero::after{content:'';position:absolute;right:-40px;top:-40px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.10),transparent 70%)}
-.ps-avatar{width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;box-shadow:0 0 22px rgba(56,189,248,.4);flex-shrink:0;border:2px solid rgba(255,255,255,.25)}
-.ps-hinfo{flex:1;min-width:0}
-.ps-hname{font-size:16px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.ps-hname .rank{font-size:10.5px;padding:2px 9px;border-radius:99px;background:rgba(56,189,248,.15);color:var(--accent);font-weight:700;letter-spacing:.5px}
-.ps-hsub{font-size:11.5px;color:var(--text2);margin-top:4px;line-height:1.5}
-.ps-hsub b{color:var(--text)}
-.ps-bars{display:flex;gap:16px;margin-top:9px;flex-wrap:wrap}
-.ps-bar{flex:1;min-width:130px}
-.ps-bar .bl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--text2);margin-bottom:3px}
-.ps-bar .bl b{color:var(--text)}
-.ps-bar .track{height:7px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--border)}
-.ps-bar .fill{height:100%;border-radius:99px;transition:width .6s ease;background:linear-gradient(90deg,var(--green),#6ee7b7)}
-.ps-bar.hp .fill{background:linear-gradient(90deg,#f87171,#fbbf24)}
-.ps-bar.money .fill{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
-.ps-caps{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
-.ps-cap{font-size:11.5px;padding:5px 11px;border-radius:9px;background:var(--bg3);border:1px solid rgba(129,140,248,.3);color:#c7d2fe;font-weight:600}
-.ps-cap b{color:var(--accent2);font-weight:800;margin-left:4px}
-.ps-sec{margin-bottom:14px}
-.ps-sec h3{font-size:11.5px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:9px;display:flex;align-items:center;gap:7px}
-.ps-sec h3::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
-.ps-goal{background:linear-gradient(135deg,rgba(251,191,36,.07),rgba(192,132,252,.05));border:1px solid rgba(251,191,36,.3);border-left:3px solid var(--orange);border-radius:11px;padding:12px 14px;font-size:13px;line-height:1.7;color:#e8d9a8}
-.ps-goal .gv{color:var(--orange);font-weight:700;font-size:12px;margin-bottom:3px}
-.ps-goal .gm{margin-top:6px;font-size:11.5px;color:var(--text2)}
-.ps-goal .gm b{color:var(--purple)}
-.ps-acts{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-@media(max-width:900px){.ps-acts{grid-template-columns:1fr}}
-.ps-act{display:flex;gap:10px;align-items:flex-start;text-align:left;padding:12px 13px;border-radius:12px;background:linear-gradient(135deg,rgba(56,189,248,.07),rgba(129,140,248,.04));border:1px solid var(--border);color:var(--text);cursor:pointer;transition:all .18s;font-size:12.5px}
-.ps-act:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 6px 18px rgba(56,189,248,.15);background:linear-gradient(135deg,rgba(56,189,248,.14),rgba(129,140,248,.08))}
-.ps-act .ai{font-size:18px;flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:var(--bg3);border-radius:9px}
-.ps-act .ad{flex:1}
-.ps-act .at{font-weight:700;font-size:13px;color:var(--text)}
-.ps-act .aintent{font-size:11px;color:var(--text2);margin-top:3px;line-height:1.5}
-.ps-custom{display:flex;gap:8px;margin-top:11px}
-.ps-custom input{flex:1;margin-bottom:0;font-size:12.5px}
-.ps-custom button{flex:0 0 auto}
-.ps-tl{position:relative;padding-left:22px}
-.ps-tl::before{content:'';position:absolute;left:7px;top:4px;bottom:4px;width:2px;background:linear-gradient(180deg,rgba(251,191,36,.5),rgba(52,211,153,.5))}
-.ps-tl-item{position:relative;padding:9px 10px 9px 0;border-bottom:1px dashed var(--border);font-size:12.5px}
-.ps-tl-item::before{content:'';position:absolute;left:-21px;top:14px;width:9px;height:9px;border-radius:50%;background:var(--orange);box-shadow:0 0 8px rgba(251,191,36,.6)}
-.ps-tl-item.done::before{background:var(--green);box-shadow:0 0 8px rgba(52,211,153,.6)}
-.ps-tl-item .tli{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.ps-tl-item .st{font-size:10px;font-weight:700;padding:1px 8px;border-radius:99px}
-.ps-tl-item .st.pending{background:rgba(251,191,36,.14);color:var(--orange)}
-.ps-tl-item .st.consumed{background:rgba(52,211,153,.14);color:var(--green)}
-.ps-tl-item .txt{color:#c9d4e4;line-height:1.6;margin-top:3px}
-.ps-tl-item .resp{margin-top:5px;padding:7px 10px;background:var(--bg3);border-left:2px solid var(--green);border-radius:7px;font-size:11.5px;color:#9fd8b8;line-height:1.55}
-.ps-rel{display:flex;flex-direction:column;gap:7px}
-.ps-rel-item{display:flex;align-items:center;gap:10px;padding:8px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;font-size:12.5px}
-.ps-rel-item .rn{flex:1;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ps-rel-item .rk{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(129,140,248,.14);color:var(--accent2);flex-shrink:0}
-.ps-rel-item .rv{flex-shrink:0;width:74px;height:6px;background:var(--bg);border-radius:99px;overflow:hidden}
-.ps-rel-item .rv i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
-.ps-rel-item .rnum{flex-shrink:0;font-size:11px;color:var(--text2);width:34px;text-align:right}
-.ps-events{display:flex;flex-direction:column;gap:6px}
-.ps-event{font-size:12px;color:#b6c2d4;line-height:1.55;padding:8px 11px;background:var(--bg3);border-left:2px solid var(--accent);border-radius:8px}
-.ps-empty{color:var(--text2);font-size:12.5px;text-align:center;padding:20px;border:1px dashed var(--border);border-radius:10px}
-/* ---------- Phase3：任务卡 + 战斗 ---------- */
-.ps-quests{display:flex;flex-direction:column;gap:7px}
-.ps-quest{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);font-size:12.5px;line-height:1.55;transition:all .18s}
-.ps-quest .qic{flex-shrink:0;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
-.ps-quest.done{opacity:.55}.ps-quest.done .qic{background:rgba(52,211,153,.15);color:var(--green)}
-.ps-quest.active{border-color:rgba(251,191,36,.5);background:linear-gradient(135deg,rgba(251,191,36,.08),transparent);box-shadow:0 0 14px rgba(251,191,36,.08)}
-.ps-quest.active .qic{background:rgba(251,191,36,.15);color:var(--orange)}
-.ps-quest.upcoming{opacity:.6}.ps-quest.upcoming .qic{background:var(--bg);color:var(--text2)}
-.ps-quest .qt{flex:1}
-.ps-quest .qst{font-size:10px;font-weight:700;padding:1px 8px;border-radius:99px;flex-shrink:0;margin-top:2px}
-.ps-quest .qst.done{background:rgba(52,211,153,.14);color:var(--green)}
-.ps-quest .qst.active{background:rgba(251,191,36,.14);color:var(--orange)}
-.ps-quest .qst.upcoming{background:var(--bg);color:var(--text2)}
-.ps-combat{display:flex;gap:8px;margin-top:9px}
-.ps-combat select{flex:1;margin-bottom:0;font-size:12.5px}
-.ps-combat button{flex:0 0 auto}
-.ps-fight{background:linear-gradient(135deg,rgba(248,113,113,.06),rgba(129,140,248,.05));border:1px solid rgba(248,113,113,.28);border-radius:12px;padding:13px;margin-top:10px;font-size:12.5px}
-.ps-fight .fh{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
-.ps-fight .fvs{font-weight:800;color:var(--text);font-size:14px}
-.ps-fight .fwin{font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px}
-.ps-fight .fwin.win{background:rgba(52,211,153,.14);color:var(--green)}
-.ps-fight .fwin.lose{background:rgba(248,113,113,.14);color:var(--red)}
-.ps-fight .fwin.draw{background:rgba(251,191,36,.14);color:var(--orange)}
-.ps-fight .fgap{font-size:11px;color:var(--text2)}
-.ps-fight .frate{font-size:11px;color:var(--accent);font-weight:700}
-.ps-rounds{display:flex;flex-direction:column;gap:4px;margin-top:7px}
-.ps-round{display:flex;align-items:center;gap:8px;font-size:11.5px;padding:4px 8px;border-radius:6px;background:var(--bg);color:#b6c2d4}
-.ps-round .rn{flex-shrink:0;width:30px;color:var(--text2);font-size:10.5px}
-.ps-round .ra{flex:1}
-.ps-round .rhit{flex-shrink:0;font-size:10px;font-weight:700}
-.ps-round .rhit.h{color:var(--red)}.ps-round .rhit.m{color:var(--text2)}
 </style>
 </head>
 <body>
@@ -331,8 +241,7 @@ label{font-size:11px;color:var(--text2);display:block;margin:6px 0 4px;letter-sp
 
   <div>
     <div class="tabs">
-      <button class="tab active" data-tab="player" onclick="switchTab('player')">🎮 玩家</button>
-      <button class="tab" data-tab="chronicle" onclick="switchTab('chronicle')">📜 编年史</button>
+      <button class="tab active" data-tab="chronicle" onclick="switchTab('chronicle')">📜 编年史</button>
       <button class="tab" data-tab="decisions" onclick="switchTab('decisions')">🎯 决策</button>
       <button class="tab" data-tab="novel" onclick="switchTab('novel')">📖 小说</button>
       <button class="tab" data-tab="memory" onclick="switchTab('memory')">🧠 记忆</button>
@@ -342,11 +251,7 @@ label{font-size:11px;color:var(--text2);display:block;margin:6px 0 4px;letter-sp
     </div>
 
     <div class="panel">
-      <div class="tab-pane active" id="pane-player">
-        <div id="playerPane"><div class="empty">加载中…</div></div>
-      </div>
-
-      <div class="tab-pane" id="pane-chronicle">
+      <div class="tab-pane active" id="pane-chronicle">
         <div class="chronicle" id="chronicle"><div class="empty">运行模拟后生成…</div></div>
       </div>
 
@@ -654,7 +559,6 @@ renderLoop();
 renderSnapshots();
 loadForeshadows();
 loadNovel();
-renderPlayer();
 }
 function renderWorldState(st){
   const t=st.world_level||{};
@@ -835,7 +739,6 @@ function switchTab(name){
   if(name==='worldbook')loadWorldbook();
   if(name==='stats')loadStats();
   if(name==='decisions')renderDecisions();
-  if(name==='player')renderPlayer();
   if(name==='memory'||name==='entities')refreshAll();
 }
 function showPauseModal(d){
@@ -847,152 +750,6 @@ function showPauseModal(d){
 }
 function closeModal(){$('modal').classList.remove('show')}
 function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'"')}
-
-/* ---------- 🎮 玩家模式（Phase2 机制层） ---------- */
-function capVal(v){if(v==null)return'-';if(typeof v==='object')return JSON.stringify(v);return v}
-async function renderPlayer(){
-  const d=await j('/api/world/player/state');
-  const el=$('playerPane');
-  if(!d||!d.ok){el.innerHTML='<div class="ps-empty">没有可用世界，先创建或选择世界</div>';return}
-  const h=d.hero||{};
-  if(!h.name){el.innerHTML='<div class="ps-empty">世界尚未初始化。<br>先在左侧输入主角名并「初始化」，或直接跑一天模拟。</div>';return}
-  const caps=h.capabilities||{};
-  const capsHtml=Object.keys(caps).length?Object.entries(caps).map(([k,v])=>`<span class="ps-cap">${escapeHtml(k)} <b>${escapeHtml(capVal(v))}</b></span>`).join(''):'';
-  const hp=Math.max(0,Math.min(100,(h.health||0)));
-  const money=Math.max(0,(h.money||0));
-  const arc=d.arc||{};
-  const arcHtml=arc.name?`
-    <div class="ps-goal">
-      <div class="gv">🎯 ${escapeHtml(arc.name)}</div>
-      <div>${escapeHtml(arc.goal||'（待定目标）')}</div>
-      ${arc.villain?`<div class="gm">🦹 对手：<b>${escapeHtml(arc.villain)}</b></div>`:''}
-      ${arc.milestones&&arc.milestones.length?`<div class="gm">🪜 里程碑：${arc.milestones.map(m=>escapeHtml(m)).join(' → ')}</div>`:''}
-    </div>`:'<div class="ps-empty">当前暂无剧情段落（GM 会在开段时规划）</div>';
-  const acts=(d.actions||[]).map(a=>{
-    const isDirect=['rest','cultivate','social'].includes(a.kind);
-    const tgt=a.target||'';
-    return `<button class="ps-act" onclick="${isDirect?`playerAction('${a.kind}','${tgt.replace(/'/g,"\\'")}')`:`playerAct(${JSON.stringify(a.intent).replace(/"/g,'"')},${JSON.stringify(h.name).replace(/"/g,'"')})`}">
-      <span class="ai">${a.icon}</span>
-      <span class="ad"><span class="at">${escapeHtml(a.label)}${isDirect?' <span style="font-size:10px;color:var(--orange);font-weight:700">⚡1</span>':''}</span><div class="aintent">${escapeHtml(a.intent)}</div></span>
-    </button>`;
-  }).join('')||'<div class="ps-empty">暂无可用行动</div>';
-  const ints=(d.intents||[]).slice().reverse().map(it=>`
-    <div class="ps-tl-item ${it.status==='consumed'?'done':''}">
-      <div class="tli">
-        <span class="st ${it.status}">${it.status==='pending'?'🕐 等待世界回应':'✅ 已被回应'}</span>
-        <span style="font-size:10.5px;color:var(--text2)">${escapeHtml(it.created_at||'')}${it.consumed_day?` · Day ${it.consumed_day}`:''}</span>
-      </div>
-      <div class="txt">${escapeHtml(it.intent)}</div>
-      ${it.response?`<div class="resp">🌍 ${escapeHtml(it.response)}</div>`:''}
-    </div>`).join('')||'<div class="ps-empty">还没有发过指令。<br>点下面的行动按钮，或自由输入你想让世界做的事～</div>';
-  const rels=(d.relationships||[]).map(r=>`
-    <div class="ps-rel-item">
-      <span class="rn">${escapeHtml(r.name)}</span>
-      <span class="rk">${escapeHtml(r.rank||'相识')}</span>
-      <span class="rv"><i style="width:${Math.max(3,Math.min(100,r.value*100))}%"></i></span>
-      <span class="rnum">${(r.value||0).toFixed(2)}</span>
-    </div>`).join('')||'<div class="ps-empty">暂无关系数据</div>';
-  const qstIcon={done:'✓',active:'▶',upcoming:'○'};
-  const qstLabel={done:'已完成',active:'进行中',upcoming:'待推进'};
-  const quests=(d.quests||[]).map(q=>`
-    <div class="ps-quest ${q.status}">
-      <span class="qic">${qstIcon[q.status]||'○'}</span>
-      <span class="qt">${escapeHtml(q.title)}</span>
-      <span class="qst ${q.status}">${qstLabel[q.status]||q.status}</span>
-    </div>`).join('')||'<div class="ps-empty">当前段落暂无里程碑任务<br>（GM 规划段落时会生成）</div>';
-  const targets=d.combat_targets||[];
-  const targetOpts=targets.length?`<option value="">选择对手…</option>`+targets.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join(''):'<option value="">（暂无可选对手）</option>';
-  const evts=(d.recent_events||[]).map(e=>`<div class="ps-event">${escapeHtml(e)}</div>`).join('')||'';
-  el.innerHTML=`
-    <div class="ps-hero">
-      <div class="ps-avatar">${escapeHtml((h.name||'?').slice(0,1))}</div>
-      <div class="ps-hinfo">
-        <div class="ps-hname">${escapeHtml(h.name||'主角')} <span class="rank">Day ${d.world.day}</span> <span class="rank" style="background:rgba(251,191,36,.15);color:var(--orange)">⚡ 行动点 ${d.ap_balance||0}/5</span></div>
-        <div class="ps-hsub">${escapeHtml(h.job||'')}<br>📍 <b>${escapeHtml(h.location||'未知')}</b></div>
-        <div class="ps-bars">
-          <div class="ps-bar hp"><div class="bl"><span>❤️ 健康</span><b>${Math.round(hp)}</b></div><div class="track"><div class="fill" style="width:${hp}%"></div></div></div>
-          <div class="ps-bar money"><div class="bl"><span>💰 资财</span><b>${Math.round(money)}</b></div><div class="track"><div class="fill" style="width:${Math.min(100,money*3)}%"></div></div></div>
-        </div>
-        ${capsHtml?`<div class="ps-caps">${capsHtml}</div>`:''}
-      </div>
-    </div>
-    <div class="ps-sec"><h3>🎯 当前目标</h3>${arcHtml}</div>
-    <div class="ps-sec"><h3>⚔️ 你的行动</h3>
-      <div class="ps-acts">${acts}</div>
-      <div class="ps-custom">
-        <input id="psCustom" placeholder="自由输入指令，让世界去做…" onkeydown="if(event.key==='Enter')playerCustom()">
-        <button class="primary" onclick="playerCustom()">发令</button>
-      </div>
-    </div>
-    <div class="ps-sec"><h3>📜 指令回执</h3><div class="ps-tl">${ints}</div></div>
-    <div class="ps-sec"><h3>🗺️ 当前任务</h3><div class="ps-quests">${quests}</div></div>
-    <div class="ps-sec"><h3>⚔️ 战斗模拟</h3>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:7px">预览模式：不改变世界，真实剧情由世界 Agent 决定</div>
-      <div class="ps-combat">
-        <select id="psCombatTarget">${targetOpts}</select>
-        <button class="primary" onclick="playerCombat()" ${targets.length?'':'disabled'}>⚔ 模拟</button>
-      </div>
-      <div id="psFight"></div>
-    </div>
-    <div class="ps-sec"><h3>🤝 关系网络</h3><div class="ps-rel">${rels}</div></div>
-    ${evts?`<div class="ps-sec"><h3>🌊 最近风云</h3><div class="ps-events">${evts}</div></div>`:''}
-  `;
-}
-async function playerAct(intent,target){
-  if(!intent)return;
-  const d=await j('/api/world/player/act',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({intent,target})});
-  if(d.ok){toast('⚡ 指令已发出，世界正在酝酿回应…');renderPlayer()}
-  else toast('失败：'+(d.error||''));
-}
-async function playerCustom(){
-  const input=$('psCustom');
-  const v=(input.value||'').trim();
-  if(!v){toast('先写点你想让世界做的事');return}
-  await playerAct(v,'');
-  input.value='';
-}
-async function playerAction(kind,target){
-  const d=await j('/api/world/player/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,target})});
-  if(d.ok&&d.action){
-    const a=d.action;
-    toast('⚡ '+a.message+'（剩余行动点 '+a.ap_left+'）');
-    renderPlayer();
-    // 同时刷新世界状态（数值变化可见）
-    refreshAll();
-  } else {
-    toast('失败：'+(d.error||''));
-  }
-}
-async function playerCombat(){
-  const sel=$('psCombatTarget');
-  const target=sel.value;
-  if(!target){toast('先选一个对手');return}
-  const box=$('psFight');
-  box.innerHTML='<div style="padding:10px;text-align:center;color:var(--text2)"><span class="spinner"></span> 模拟中…</div>';
-  const d=await j('/api/world/player/combat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target})});
-  const c=d.combat;
-  if(!d.ok||!c){box.innerHTML='<div class="ps-empty">模拟失败：'+(d.error||'')+'</div>';return}
-  const wmap={hero:['你胜','win'],enemy:['对方胜','lose'],draw:['两败俱伤','draw']};
-  const [wlabel,wcls]=wmap[c.winner]||[c.winner,'draw'];
-  const rounds=(c.rounds||[]).map(rd=>`
-    <div class="ps-round">
-      <span class="rn">R${rd.round}</span>
-      <span class="ra">${escapeHtml(rd.attacker)} ${escapeHtml(rd.action)}${rd.damage>0?`（伤害 ${Math.round(rd.damage)}）`:''}</span>
-      <span class="rhit ${rd.hit?'h':'m'}">${rd.hit?'命中':'未中'}</span>
-      <span style="flex-shrink:0;color:var(--text2)">剩 ${Math.round(rd.hp_left)}</span>
-    </div>`).join('');
-  box.innerHTML=`
-    <div class="ps-fight">
-      <div class="fh">
-        <span class="fvs">${escapeHtml(c.hero)} ⚔ ${escapeHtml(c.enemy)}</span>
-        <span class="fwin ${wcls}">${wlabel}</span>
-        <span class="frate">胜率预估 ${Math.round(c.win_rate||0)}%</span>
-      </div>
-      <div class="fgap">${escapeHtml(c.power_gap||'')} · 结束健康：你 ${Math.round(c.hero_hp||0)} / 对方 ${Math.round(c.enemy_hp||0)}</div>
-      <div class="ps-rounds">${rounds}</div>
-    </div>`;
-  toast('⚔ 战斗模拟完成（预览，不改变世界）');
-}
 let toastTimer=null;
 function toast(msg){
   $('toast').textContent=msg;$('toast').style.display='block';
