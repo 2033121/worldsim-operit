@@ -252,7 +252,7 @@ func (s *Simulator) buildActions() []PlayerAction {
 		acts = append(acts, PlayerAction{
 			ID: "act-gather", Kind: "explore", Icon: "🗺️",
 			Label: "多方打听",
-			Intent: "四处打听新鲜事和隐藏机会，看看有没有值得抓住的机缘",
+			Intent: "四处打听新鲜事和隐藏机会，看看有没有值得抓住的机遇",
 		})
 	}
 	return acts
