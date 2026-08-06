@@ -189,6 +189,37 @@ label{font-size:11px;color:var(--text2);display:block;margin:6px 0 4px;letter-sp
 .ps-events{display:flex;flex-direction:column;gap:6px}
 .ps-event{font-size:12px;color:#b6c2d4;line-height:1.55;padding:8px 11px;background:var(--bg3);border-left:2px solid var(--accent);border-radius:8px}
 .ps-empty{color:var(--text2);font-size:12.5px;text-align:center;padding:20px;border:1px dashed var(--border);border-radius:10px}
+/* ---------- Phase3：任务卡 + 战斗 ---------- */
+.ps-quests{display:flex;flex-direction:column;gap:7px}
+.ps-quest{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);font-size:12.5px;line-height:1.55;transition:all .18s}
+.ps-quest .qic{flex-shrink:0;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+.ps-quest.done{opacity:.55}.ps-quest.done .qic{background:rgba(52,211,153,.15);color:var(--green)}
+.ps-quest.active{border-color:rgba(251,191,36,.5);background:linear-gradient(135deg,rgba(251,191,36,.08),transparent);box-shadow:0 0 14px rgba(251,191,36,.08)}
+.ps-quest.active .qic{background:rgba(251,191,36,.15);color:var(--orange)}
+.ps-quest.upcoming{opacity:.6}.ps-quest.upcoming .qic{background:var(--bg);color:var(--text2)}
+.ps-quest .qt{flex:1}
+.ps-quest .qst{font-size:10px;font-weight:700;padding:1px 8px;border-radius:99px;flex-shrink:0;margin-top:2px}
+.ps-quest .qst.done{background:rgba(52,211,153,.14);color:var(--green)}
+.ps-quest .qst.active{background:rgba(251,191,36,.14);color:var(--orange)}
+.ps-quest .qst.upcoming{background:var(--bg);color:var(--text2)}
+.ps-combat{display:flex;gap:8px;margin-top:9px}
+.ps-combat select{flex:1;margin-bottom:0;font-size:12.5px}
+.ps-combat button{flex:0 0 auto}
+.ps-fight{background:linear-gradient(135deg,rgba(248,113,113,.06),rgba(129,140,248,.05));border:1px solid rgba(248,113,113,.28);border-radius:12px;padding:13px;margin-top:10px;font-size:12.5px}
+.ps-fight .fh{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
+.ps-fight .fvs{font-weight:800;color:var(--text);font-size:14px}
+.ps-fight .fwin{font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px}
+.ps-fight .fwin.win{background:rgba(52,211,153,.14);color:var(--green)}
+.ps-fight .fwin.lose{background:rgba(248,113,113,.14);color:var(--red)}
+.ps-fight .fwin.draw{background:rgba(251,191,36,.14);color:var(--orange)}
+.ps-fight .fgap{font-size:11px;color:var(--text2)}
+.ps-fight .frate{font-size:11px;color:var(--accent);font-weight:700}
+.ps-rounds{display:flex;flex-direction:column;gap:4px;margin-top:7px}
+.ps-round{display:flex;align-items:center;gap:8px;font-size:11.5px;padding:4px 8px;border-radius:6px;background:var(--bg);color:#b6c2d4}
+.ps-round .rn{flex-shrink:0;width:30px;color:var(--text2);font-size:10.5px}
+.ps-round .ra{flex:1}
+.ps-round .rhit{flex-shrink:0;font-size:10px;font-weight:700}
+.ps-round .rhit.h{color:var(--red)}.ps-round .rhit.m{color:var(--text2)}
 </style>
 </head>
 <body>
@@ -857,8 +888,17 @@ async function renderPlayer(){
       <span class="rk">${escapeHtml(r.rank||'相识')}</span>
       <span class="rv"><i style="width:${Math.max(3,Math.min(100,r.value*100))}%"></i></span>
       <span class="rnum">${(r.value||0).toFixed(2)}</span>
->
     </div>`).join('')||'<div class="ps-empty">暂无关系数据</div>';
+  const qstIcon={done:'✓',active:'▶',upcoming:'○'};
+  const qstLabel={done:'已完成',active:'进行中',upcoming:'待推进'};
+  const quests=(d.quests||[]).map(q=>`
+    <div class="ps-quest ${q.status}">
+      <span class="qic">${qstIcon[q.status]||'○'}</span>
+      <span class="qt">${escapeHtml(q.title)}</span>
+      <span class="qst ${q.status}">${qstLabel[q.status]||q.status}</span>
+    </div>`).join('')||'<div class="ps-empty">当前段落暂无里程碑任务<br>（GM 规划段落时会生成）</div>';
+  const targets=d.combat_targets||[];
+  const targetOpts=targets.length?`<option value="">选择对手…</option>`+targets.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join(''):'<option value="">（暂无可选对手）</option>';
   const evts=(d.recent_events||[]).map(e=>`<div class="ps-event">${escapeHtml(e)}</div>`).join('')||'';
   el.innerHTML=`
     <div class="ps-hero">
@@ -882,6 +922,15 @@ async function renderPlayer(){
       </div>
     </div>
     <div class="ps-sec"><h3>📜 指令回执</h3><div class="ps-tl">${ints}</div></div>
+    <div class="ps-sec"><h3>🗺️ 当前任务</h3><div class="ps-quests">${quests}</div></div>
+    <div class="ps-sec"><h3>⚔️ 战斗模拟</h3>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:7px">预览模式：不改变世界，真实剧情由世界 Agent 决定</div>
+      <div class="ps-combat">
+        <select id="psCombatTarget">${targetOpts}</select>
+        <button class="primary" onclick="playerCombat()" ${targets.length?'':'disabled'}>⚔ 模拟</button>
+      </div>
+      <div id="psFight"></div>
+    </div>
     <div class="ps-sec"><h3>🤝 关系网络</h3><div class="ps-rel">${rels}</div></div>
     ${evts?`<div class="ps-sec"><h3>🌊 最近风云</h3><div class="ps-events">${evts}</div></div>`:''}
   `;
@@ -898,6 +947,36 @@ async function playerCustom(){
   if(!v){toast('先写点你想让世界做的事');return}
   await playerAct(v,'');
   input.value='';
+}
+async function playerCombat(){
+  const sel=$('psCombatTarget');
+  const target=sel.value;
+  if(!target){toast('先选一个对手');return}
+  const box=$('psFight');
+  box.innerHTML='<div style="padding:10px;text-align:center;color:var(--text2)"><span class="spinner"></span> 模拟中…</div>';
+  const d=await j('/api/world/player/combat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target})});
+  const c=d.combat;
+  if(!d.ok||!c){box.innerHTML='<div class="ps-empty">模拟失败：'+(d.error||'')+'</div>';return}
+  const wmap={hero:['你胜','win'],enemy:['对方胜','lose'],draw:['两败俱伤','draw']};
+  const [wlabel,wcls]=wmap[c.winner]||[c.winner,'draw'];
+  const rounds=(c.rounds||[]).map(rd=>`
+    <div class="ps-round">
+      <span class="rn">R${rd.round}</span>
+      <span class="ra">${escapeHtml(rd.attacker)} ${escapeHtml(rd.action)}${rd.damage>0?`（伤害 ${Math.round(rd.damage)}）`:''}</span>
+      <span class="rhit ${rd.hit?'h':'m'}">${rd.hit?'命中':'未中'}</span>
+      <span style="flex-shrink:0;color:var(--text2)">剩 ${Math.round(rd.hp_left)}</span>
+    </div>`).join('');
+  box.innerHTML=`
+    <div class="ps-fight">
+      <div class="fh">
+        <span class="fvs">${escapeHtml(c.hero)} ⚔ ${escapeHtml(c.enemy)}</span>
+        <span class="fwin ${wcls}">${wlabel}</span>
+        <span class="frate">胜率预估 ${Math.round(c.win_rate||0)}%</span>
+      </div>
+      <div class="fgap">${escapeHtml(c.power_gap||'')} · 结束健康：你 ${Math.round(c.hero_hp||0)} / 对方 ${Math.round(c.enemy_hp||0)}</div>
+      <div class="ps-rounds">${rounds}</div>
+    </div>`;
+  toast('⚔ 战斗模拟完成（预览，不改变世界）');
 }
 let toastTimer=null;
 function toast(msg){

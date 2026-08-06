@@ -199,6 +199,8 @@ func startWorldServer(worldDir string, apiCfg *config.APIConfig) {
 	// 玩家介入层（Phase 1：在小说世界里"玩"）
 	mux.HandleFunc("POST /api/world/player/act", ws.handlePlayerAct)
 	mux.HandleFunc("GET /api/world/player/state", ws.handlePlayerState)
+	// Phase3：战斗回合模拟（预览模式）
+	mux.HandleFunc("POST /api/world/player/combat", ws.handlePlayerCombat)
 
 	// 时间回退：快照列表 / 手动存档 / 回退
 	mux.HandleFunc("GET /api/world/snapshots", ws.handleSnapshots)
@@ -1026,6 +1028,7 @@ func (ws *worldServer) handlePlayerState(w http.ResponseWriter, r *http.Request)
 		ws.writeJSON(w, 200, map[string]any{
 			"ok": true, "world": map[string]any{"name": inst.name, "day": 0, "hero": ""},
 			"intents": []sim.PlayerIntent{}, "actions": []sim.PlayerAction{},
+			"quests": []sim.Quest{}, "combat_targets": []string{},
 			"stats": map[string]int{"pending": 0, "consumed": 0},
 			"hint":  "世界尚未初始化，先 /api/world/init",
 		})
@@ -1042,7 +1045,37 @@ func (ws *worldServer) handlePlayerState(w http.ResponseWriter, r *http.Request)
 		"actions":     ps.Actions,
 		"intents":     ps.Intents,
 		"stats":       ps.Stats,
+		"quests":      ps.Quests,
+		"combat_targets": ps.CombatTargets,
 		"hint":        "选择行动或自由输入指令；指令会在下一个事件日被世界回应",
+	})
+}
+
+// POST /api/world/player/combat — 战斗回合模拟（预览模式，不写世界状态）
+// body: {"target":"对手名"}
+func (ws *worldServer) handlePlayerCombat(w http.ResponseWriter, r *http.Request) {
+	inst := ws.inst()
+	if inst == nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可用世界，请先创建"})
+		return
+	}
+	if inst.sim == nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "世界尚未初始化，先 /api/world/init"})
+		return
+	}
+	var req struct {
+		Target string `json:"target"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "请求体解析失败: " + err.Error()})
+		return
+	}
+	res := inst.sim.SimulateCombat(strings.TrimSpace(req.Target))
+	ws.writeJSON(w, 200, map[string]any{
+		"ok": true,
+		"combat": res,
+		"summary": sim.FormatCombatSummary(res),
+		"hint": "预览模拟：不改变世界状态，真实剧情由事件 Agent 决定",
 	})
 }
 

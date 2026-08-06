@@ -16,15 +16,17 @@ import (
 
 // PlayerState 玩家面板完整数据（/api/world/player/state 返回）
 type PlayerState struct {
-	World   string             `json:"world"`
-	Day     int                `json:"day"`
-	Hero    PlayerHeroState    `json:"hero"`
-	Arc     PlayerArcState     `json:"arc"`
-	RelTop  []PlayerRelEntry   `json:"relationships"`
-	Recent  []string           `json:"recent_events"`
-	Actions []PlayerAction     `json:"actions"`
-	Intents []PlayerIntent     `json:"intents"`
-	Stats   map[string]int     `json:"stats"`
+	World        string           `json:"world"`
+	Day          int              `json:"day"`
+	Hero         PlayerHeroState  `json:"hero"`
+	Arc          PlayerArcState   `json:"arc"`
+	RelTop       []PlayerRelEntry `json:"relationships"`
+	Recent       []string         `json:"recent_events"`
+	Actions      []PlayerAction   `json:"actions"`
+	Intents      []PlayerIntent   `json:"intents"`
+	Stats        map[string]int   `json:"stats"`
+	Quests       []Quest          `json:"quests"`        // Phase3：任务卡（段落里程碑）
+	CombatTargets []string        `json:"combat_targets"` // Phase3：可战斗对象
 }
 
 // PlayerHeroState 主角状态卡
@@ -144,6 +146,9 @@ func (s *Simulator) PlayerState() *PlayerState {
 
 	// 行动选项（世界数据驱动）
 	st.Actions = s.buildActions()
+	// Phase3：任务卡 + 可战斗对象
+	st.Quests = s.Quests()
+	st.CombatTargets = s.combatTargets()
 	return st
 }
 
