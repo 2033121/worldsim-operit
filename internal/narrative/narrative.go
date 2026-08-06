@@ -107,6 +107,7 @@ type Input struct {
 	Hero        string                    // 主角名
 	Direction   Direction                 // 剧情方向
 	LLM         *config.APIConfig         // LLM 配置（nil=降级规则分章）
+	MaxChapters int                       // 目标章节数上限（0=不限；>0 只规划前 N 章）
 }
 
 // ---------- 编年史按段落归属 ----------

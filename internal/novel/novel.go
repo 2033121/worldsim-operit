@@ -47,6 +47,7 @@ type Writer struct {
 	PrevSummary string // 前面所有章节的一句话摘要（累积，最近优先）
 	Foreshadows string // 未回收伏笔清单（模拟层伏笔账本，写手可推进/回收）
 	Decisions   string // 本章涉及剧情岔口与已定方向（用户改选优先，否则 AI 代决；写手必须照此方向写）
+	ChroniclePick string // 本章编年史精选（确定性规则筛选的 SAID/FACT 原文，写手增强细节贴合，可空）
 }
 
 // NewWriter 创建小说化写手

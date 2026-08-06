@@ -26,6 +26,10 @@ func (e *Engine) Run(ctx context.Context) (*Plan, error) {
 		// 分章失败已有兜底，继续
 		units = fallbackUnits(in)
 	}
+	// 章节上限：只对前 N 章做节拍/剧本（避免规划全书几十章、几十次 LLM 调用）
+	if in.MaxChapters > 0 && len(units) > in.MaxChapters {
+		units = units[:in.MaxChapters]
+	}
 	if len(units) == 0 {
 		return &Plan{Direction: in.Direction}, nil
 	}

@@ -1354,6 +1354,9 @@ func (ws *worldServer) handleNovelGenerate(w http.ResponseWriter, r *http.Reques
 	var charCardsByChapter map[int]string = map[int]string{}
 	if len(inst.sim.ArcBook()) > 0 {
 		in := ws.buildNarrativeInput(inst)
+		if req.MaxChapters > 0 {
+			in.MaxChapters = req.MaxChapters // 规划阶段就限章数（避免规划全书几十章浪费调用）
+		}
 		eng := narrative.NewEngine(in)
 		plan, nerr := eng.Run(r.Context())
 		if nerr == nil && len(plan.Units) > 0 {
@@ -1426,6 +1429,8 @@ func (ws *worldServer) handleNovelGenerate(w http.ResponseWriter, r *http.Reques
 		var err error
 		if scripts, ok := scriptsByChapter[p.Num]; ok && scripts != "" {
 			// 新流程：按剧情引擎的剧本写（场景目标/冲突/对话要点 + 角色状态卡）
+			// 注入本章编年史精选（确定性规则筛 SAID/FACT 原文，增强细节贴合，零 LLM）
+			inst.novelW.ChroniclePick = novel.PickChapterChronicle(chronicle, p.DayStart, p.DayEnd)
 			_, err = inst.novelW.WriteFromScripts(ctx, *p, scripts, charCardsByChapter[p.Num], entities)
 		} else {
 			// 旧流程：直接翻译编年史（无剧本的降级路径）
