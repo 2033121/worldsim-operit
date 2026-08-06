@@ -108,6 +108,10 @@ func (w *Writer) WriteFromScripts(ctx context.Context, p ChapterPlan, scriptsTex
 【本章剧情方向（已定，写手必须严格执行）】
 ` + w.Decisions
 	}
+	// 本章编年史精选注入：确定性筛选的对话/事件原文（细节原料，增强与模拟世界的贴合度）
+	if w.ChroniclePick != "" {
+		material = strings.TrimSpace(material) + "\n\n" + w.ChroniclePick
+	}
 
 	material = strings.TrimSpace(material) + "\n\n【最后指令】现在直接写第" + fmt.Sprintf("%d", p.Num) + "章正文。第一行写'第" + fmt.Sprintf("%d", p.Num) + "章·标题'——标题必须是你起的网文章节名（要有悬念/冲突/画面感，2~8个字，禁止用剧本条目名）。然后按场景剧本顺序写正文，正文结束另起一行写【本章摘要】。"
 	res, err := llm.CallAPITierSyncResult(ctx, &cfg, "premium", system, material)
