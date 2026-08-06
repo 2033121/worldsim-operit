@@ -201,6 +201,8 @@ func startWorldServer(worldDir string, apiCfg *config.APIConfig) {
 	mux.HandleFunc("GET /api/world/player/state", ws.handlePlayerState)
 	// Phase3：战斗回合模拟（预览模式）
 	mux.HandleFunc("POST /api/world/player/combat", ws.handlePlayerCombat)
+	// Phase4：玩家行动真实生效（行动点）
+	mux.HandleFunc("POST /api/world/player/action", ws.handlePlayerAction)
 
 	// 时间回退：快照列表 / 手动存档 / 回退
 	mux.HandleFunc("GET /api/world/snapshots", ws.handleSnapshots)
@@ -1076,6 +1078,37 @@ func (ws *worldServer) handlePlayerCombat(w http.ResponseWriter, r *http.Request
 		"combat": res,
 		"summary": sim.FormatCombatSummary(res),
 		"hint": "预览模拟：不改变世界状态，真实剧情由事件 Agent 决定",
+	})
+}
+
+// POST /api/world/player/action — 玩家行动真实生效（消耗行动点，写入世界状态）
+// body: {"kind":"rest|cultivate|social","target":"角色名（social 必填）"}
+func (ws *worldServer) handlePlayerAction(w http.ResponseWriter, r *http.Request) {
+	inst := ws.inst()
+	if inst == nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可用世界，请先创建"})
+		return
+	}
+	if inst.sim == nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "世界尚未初始化，先 /api/world/init"})
+		return
+	}
+	var req struct {
+		Kind   string `json:"kind"`
+		Target string `json:"target"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "请求体解析失败: " + err.Error()})
+		return
+	}
+	res, err := inst.sim.PlayerAction(r.Context(), req.Kind, req.Target)
+	if err != nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	ws.writeJSON(w, 200, map[string]any{
+		"ok": true, "action": res,
+		"hint": "行动已写入世界状态（与 LLM 推进同路径，受硬规则校验）",
 	})
 }
 

@@ -868,11 +868,14 @@ async function renderPlayer(){
       ${arc.villain?`<div class="gm">🦹 对手：<b>${escapeHtml(arc.villain)}</b></div>`:''}
       ${arc.milestones&&arc.milestones.length?`<div class="gm">🪜 里程碑：${arc.milestones.map(m=>escapeHtml(m)).join(' → ')}</div>`:''}
     </div>`:'<div class="ps-empty">当前暂无剧情段落（GM 会在开段时规划）</div>';
-  const acts=(d.actions||[]).map(a=>`
-    <button class="ps-act" onclick="playerAct(${JSON.stringify(a.intent).replace(/"/g,'"')},${JSON.stringify(h.name).replace(/"/g,'"')})">
+  const acts=(d.actions||[]).map(a=>{
+    const isDirect=['rest','cultivate','social'].includes(a.kind);
+    const tgt=a.target||'';
+    return `<button class="ps-act" onclick="${isDirect?`playerAction('${a.kind}','${tgt.replace(/'/g,"\\'")}')`:`playerAct(${JSON.stringify(a.intent).replace(/"/g,'"')},${JSON.stringify(h.name).replace(/"/g,'"')})`}">
       <span class="ai">${a.icon}</span>
-      <span class="ad"><span class="at">${escapeHtml(a.label)}</span><div class="aintent">${escapeHtml(a.intent)}</div></span>
-    </button>`).join('')||'<div class="ps-empty">暂无可用行动</div>';
+      <span class="ad"><span class="at">${escapeHtml(a.label)}${isDirect?' <span style="font-size:10px;color:var(--orange);font-weight:700">⚡1</span>':''}</span><div class="aintent">${escapeHtml(a.intent)}</div></span>
+    </button>`;
+  }).join('')||'<div class="ps-empty">暂无可用行动</div>';
   const ints=(d.intents||[]).slice().reverse().map(it=>`
     <div class="ps-tl-item ${it.status==='consumed'?'done':''}">
       <div class="tli">
@@ -904,7 +907,7 @@ async function renderPlayer(){
     <div class="ps-hero">
       <div class="ps-avatar">${escapeHtml((h.name||'?').slice(0,1))}</div>
       <div class="ps-hinfo">
-        <div class="ps-hname">${escapeHtml(h.name||'主角')} <span class="rank">Day ${d.world.day}</span></div>
+        <div class="ps-hname">${escapeHtml(h.name||'主角')} <span class="rank">Day ${d.world.day}</span> <span class="rank" style="background:rgba(251,191,36,.15);color:var(--orange)">⚡ 行动点 ${d.ap_balance||0}/5</span></div>
         <div class="ps-hsub">${escapeHtml(h.job||'')}<br>📍 <b>${escapeHtml(h.location||'未知')}</b></div>
         <div class="ps-bars">
           <div class="ps-bar hp"><div class="bl"><span>❤️ 健康</span><b>${Math.round(hp)}</b></div><div class="track"><div class="fill" style="width:${hp}%"></div></div></div>
@@ -947,6 +950,18 @@ async function playerCustom(){
   if(!v){toast('先写点你想让世界做的事');return}
   await playerAct(v,'');
   input.value='';
+}
+async function playerAction(kind,target){
+  const d=await j('/api/world/player/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,target})});
+  if(d.ok&&d.action){
+    const a=d.action;
+    toast('⚡ '+a.message+'（剩余行动点 '+a.ap_left+'）');
+    renderPlayer();
+    // 同时刷新世界状态（数值变化可见）
+    refreshAll();
+  } else {
+    toast('失败：'+(d.error||''));
+  }
 }
 async function playerCombat(){
   const sel=$('psCombatTarget');

@@ -391,6 +391,8 @@ func (s *Simulator) nextCmd(actor string) string {
 // RunDay 执行一天（Scene 全模拟 / Summary 轻模拟 / Skip 快进，§5.1/§5.2）
 func (s *Simulator) RunDay(ctx context.Context) (*DayResult, error) {
 	s.day++
+	// Phase4：每模拟日恢复 1 行动点（玩家行动货币）
+	s.recoverAP(s.day)
 	res := &DayResult{Day: s.day, Mode: s.mode}
 	// 每天开始时重置 LLM 熔断标记（当天是否熔断由当天调用结果决定）
 	s.llmBroken = false

@@ -27,6 +27,7 @@ type PlayerState struct {
 	Stats        map[string]int   `json:"stats"`
 	Quests       []Quest          `json:"quests"`        // Phase3：任务卡（段落里程碑）
 	CombatTargets []string        `json:"combat_targets"` // Phase3：可战斗对象
+	APBalance    int              `json:"ap_balance"`     // Phase4：行动点余额
 }
 
 // PlayerHeroState 主角状态卡
@@ -61,7 +62,8 @@ type PlayerAction struct {
 	Kind   string `json:"kind"` // investigate | social | cultivate | rest | explore
 	Icon   string `json:"icon"`
 	Label  string `json:"label"`
-	Intent string `json:"intent"` // 点击后实际发出的玩家指令
+	Intent string `json:"intent"`         // 点击后实际发出的玩家指令
+	Target string `json:"target,omitempty"` // 直接行动的目标角色（social 用，其余空）
 }
 
 // PlayerState 生成玩家面板（世界数据规则化，零 LLM）
@@ -149,6 +151,8 @@ func (s *Simulator) PlayerState() *PlayerState {
 	// Phase3：任务卡 + 可战斗对象
 	st.Quests = s.Quests()
 	st.CombatTargets = s.combatTargets()
+	// Phase4：行动点余额
+	st.APBalance = s.PlayerAPBalance()
 	return st
 }
 
@@ -224,7 +228,7 @@ func (s *Simulator) buildActions() []PlayerAction {
 			rank := s.relRank(s.heroName, best)
 			acts = append(acts, PlayerAction{
 				ID: "act-social", Kind: "social", Icon: "🤝",
-				Label: "会晤 " + best,
+				Label: "会晤 " + best, Target: best,
 				Intent: "主动去找" + best + "深谈一次，巩固情谊、交换消息（当前关系：" + rank + "）",
 			})
 		}
