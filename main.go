@@ -48,6 +48,23 @@ const (
 	worldPort = ":48091" // 世界模拟服务（WorldSim 新增）
 )
 
+// worldListenAddr 世界模拟服务监听地址（默认 48091；游戏化分支支持环境变量
+// WORLDSIM_PORT 覆盖端口——独立服务实例测试/多世界并行时用，不冲突默认端口）
+func worldListenAddr() string {
+	if p := os.Getenv("WORLDSIM_PORT"); p != "" {
+		return ":" + p
+	}
+	return worldPort
+}
+
+// storyListenAddr 小说创作服务监听地址（默认 48090；环境变量 WORLDSIM_STORY_PORT 覆盖）
+func storyListenAddr() string {
+	if p := os.Getenv("WORLDSIM_STORY_PORT"); p != "" {
+		return ":" + p
+	}
+	return storyPort
+}
+
 func main() {
 	progDir := resolveProgDir()
 	storysDir := filepath.Join(progDir, "storys")
@@ -81,8 +98,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("嵌入静态文件失败: %v", err)
 	}
-	go httpapi.StartWebServer(apiCfg, apiCfgPath, logger, storyPort, progDir, version, staticFS)
-	lx.Info("系统", "小说创作服务已启动: http://localhost%s", storyPort)
+	go httpapi.StartWebServer(apiCfg, apiCfgPath, logger, storyListenAddr(), progDir, version, staticFS)
+	lx.Info("系统", "小说创作服务已启动: http://localhost%s", storyListenAddr())
 
 	// ---------- 启动世界模拟服务（48091） ----------
 	go startWorldServer(worldDir, apiCfg)
@@ -179,6 +196,10 @@ func startWorldServer(worldDir string, apiCfg *config.APIConfig) {
 	mux.HandleFunc("POST /api/world/loop", ws.handleLoopSet)
 	mux.HandleFunc("GET /api/world/loop", ws.handleLoopStatus)
 
+	// 玩家介入层（Phase 1：在小说世界里"玩"）
+	mux.HandleFunc("POST /api/world/player/act", ws.handlePlayerAct)
+	mux.HandleFunc("GET /api/world/player/state", ws.handlePlayerState)
+
 	// 时间回退：快照列表 / 手动存档 / 回退
 	mux.HandleFunc("GET /api/world/snapshots", ws.handleSnapshots)
 	mux.HandleFunc("POST /api/world/snapshot", ws.handleSnapshot)
@@ -204,7 +225,7 @@ func startWorldServer(worldDir string, apiCfg *config.APIConfig) {
 		w.Write(data)
 	})
 
-	if err := http.ListenAndServe(worldPort, mux); err != nil {
+	if err := http.ListenAndServe(worldListenAddr(), mux); err != nil {
 		log.Fatalf(" [世界模拟] 服务启动失败: %v", err)
 	}
 }
@@ -959,6 +980,71 @@ func (ws *worldServer) handleToday(w http.ResponseWriter, r *http.Request) {
 		"day":      inst.lastDay.Day,
 		"events":   inst.lastDay.Events,
 		"dialogue": inst.lastDay.Dialogue,
+	})
+}
+
+// POST /api/world/player/act — 玩家向世界发指令（Phase 1 玩家介入层）
+// body: {"intent":"让主角去调查那件怪事","target":"主角"}（target 可空）
+// 指令排队，下一个事件生成日注入事件 Agent，世界自然回应（不打断长跑）
+func (ws *worldServer) handlePlayerAct(w http.ResponseWriter, r *http.Request) {
+	inst := ws.inst()
+	if inst == nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可用世界，请先创建"})
+		return
+	}
+	if inst.sim == nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "世界尚未初始化，先 /api/world/init"})
+		return
+	}
+	var req struct {
+		Intent string `json:"intent"`
+		Target string `json:"target"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "请求体解析失败: " + err.Error()})
+		return
+	}
+	id, err := inst.sim.QueuePlayerIntent(req.Intent, req.Target)
+	if err != nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	ws.writeJSON(w, 200, map[string]any{
+		"ok": true, "id": id,
+		"hint": "指令已入队，下一个事件日世界会自然回应（可在 /api/world/player/state 查看回执）",
+	})
+}
+
+// GET /api/world/player/state — 玩家面板（世界概况 + 指令队列 + 回执）
+func (ws *worldServer) handlePlayerState(w http.ResponseWriter, r *http.Request) {
+	inst := ws.inst()
+	if inst == nil {
+		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可用世界，请先创建"})
+		return
+	}
+	worldInfo := map[string]any{"name": "", "day": 0, "hero": ""}
+	pending := 0
+	consumed := 0
+	var intents []sim.PlayerIntent
+	if inst.sim != nil {
+		worldInfo["name"] = inst.name
+		worldInfo["day"] = inst.sim.CurrentDay()
+		worldInfo["hero"] = inst.sim.HeroName()
+		intents = inst.sim.PlayerIntents()
+		for _, it := range intents {
+			if it.Status == "pending" {
+				pending++
+			} else {
+				consumed++
+			}
+		}
+	}
+	ws.writeJSON(w, 200, map[string]any{
+		"ok": true,
+		"world": worldInfo,
+		"intents": intents,
+		"stats":   map[string]int{"pending": pending, "consumed": consumed},
+		"hint":    "POST /api/world/player/act 发指令；指令会在下一个事件日被世界回应",
 	})
 }
 

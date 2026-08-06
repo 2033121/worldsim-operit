@@ -55,6 +55,8 @@ type Simulator struct {
 	llmBroken          bool                  // LLM 熔断标记：本日 LLM 连续失败后，后续步骤直接 dry-run（防中转慢时一步一卡，一天跑几十分钟）
 	openingDays        int                   // 开篇保障期天数：前 N 天强制 Scene 模式 + 张力保底（小说开篇必须有张力，不能一上来就平淡快进）
 	openingTension     float64               // 开篇保障期张力下限（默认 0.55：事件生成器会持续产出高 severity 事件，撑起前十章的戏）
+	playerIntents      []PlayerIntent        // 玩家指令队列（Phase 1：外部观察者指令，事件日自然消费）
+	playerMu           sync.Mutex            // 玩家指令并发锁
 }
 
 // EnableLLM 启用 LLM Agent（配置后主角/世界/事件用真实决策）
@@ -105,6 +107,8 @@ func NewSimulator(se *engine.StateEngine, worldDir string) *Simulator {
 	s.loadChronicle()
 	// 导演层恢复：段落大纲/部门负责人/伏笔账本/时间锚点（防重启牛头不对马嘴）
 	s.loadPlans()
+	// 玩家介入层恢复：历史指令（重启不丢，pending 的继续排队等事件日消费）
+	s.loadPlayerIntents()
 	return s
 }
 
@@ -129,6 +133,9 @@ func (s *Simulator) inOpening() bool {
 
 // HeroName 返回主角名
 func (s *Simulator) HeroName() string { return s.heroName }
+
+// CurrentDay 返回当前模拟日
+func (s *Simulator) CurrentDay() int { return s.day }
 
 // SetHeroName 设置主角名（初始化/恢复时同步，防止视角漂移）
 func (s *Simulator) SetHeroName(name string) {
@@ -490,10 +497,21 @@ func (s *Simulator) RunDay(ctx context.Context) (*DayResult, error) {
 		if da := s.DynamicAgentsState(); da != "" {
 			extraCtx += "活跃的负责人线（各部门在行动，事件要呼应它们）：\n" + da
 		}
+		// 玩家介入层（Phase 1）：未消费的玩家指令注入事件 Agent，世界自然回应
+		playerPend := s.pendingPlayerIntents()
+		playerPrompt := ""
+		if len(playerPend) > 0 {
+			playerPrompt = playerIntentPrompt(playerPend)
+			extraCtx += "\n" + playerPrompt
+			logx.Get("").Info("模拟", "Day%d 玩家指令注入：%d 条待回应", s.day, len(playerPend))
+		}
 		if evs, err := EventGenLLM(ctx, s.llm, s.engine.State(), s.heroName, s.wb, s.OpenForeshadows(), formatPendingEvents(s, s.day), revealedAll, unrevealed, luckHint, s.lastDramaDay, s.currentArc, extraCtx); err == nil && len(evs) > 0 {
 			s.events = evs
 			logx.M().RecordEvent(true, s.day)
 			logx.Get("").Debug("模拟", "Day%d 事件生成成功 %d 条", s.day, len(evs))
+			if len(playerPend) > 0 {
+				s.settlePlayerIntents(playerIntentIDs(playerPend), s.day, playerEventSummary(evs))
+			}
 		} else {
 			// 事件生成失败：重试 2 次，重试间适当等待（30s/60s）——给中转站/网络恢复时间
 			// 立即重试只会连续撞同一个故障；最终仍失败 → 返回错误中止当天
@@ -512,6 +530,9 @@ func (s *Simulator) RunDay(ctx context.Context) (*DayResult, error) {
 						s.events = evs
 						logx.M().RecordEvent(true, s.day)
 						logx.Get("").Debug("模拟", "Day%d 事件生成重试成功 %d 条", s.day, len(evs))
+						if len(playerPend) > 0 {
+							s.settlePlayerIntents(playerIntentIDs(playerPend), s.day, playerEventSummary(evs))
+						}
 						break
 					}
 				}
