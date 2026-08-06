@@ -558,7 +558,7 @@ renderReadiness();
 renderLoop();
 renderSnapshots();
 loadForeshadows();
-loadNovel();
+if(!window._curChapter)loadNovel();
 }
 function renderWorldState(st){
   const t=st.world_level||{};
@@ -729,13 +729,13 @@ async function reviseChapter(num,opinion){
   if(d.ok){toast('✅ 第'+num+'章已返修');readChapter(num)}
   else toast('返修失败：'+(d.error||''));
 }
-function backToNovel(){loadNovel()}
+function backToNovel(){window._curChapter=null;loadNovel()}
 
 /* ---------- Tab / 弹窗 ---------- */
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id==='pane-'+name));
-  if(name==='novel')loadNovel();
+  if(name==='novel'&&!window._curChapter)loadNovel();
   if(name==='worldbook')loadWorldbook();
   if(name==='stats')loadStats();
   if(name==='decisions')renderDecisions();
