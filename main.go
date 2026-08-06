@@ -103,7 +103,7 @@ func main() {
 
 	// ---------- 启动世界模拟服务（48091） ----------
 	go startWorldServer(worldDir, apiCfg)
-	lx.Info("系统", "世界模拟服务已启动: http://localhost%s", worldPort)
+	lx.Info("系统", "世界模拟服务已启动: http://localhost%s", worldListenAddr())
 
 	// ---------- 运行检测 + 自动修复 ----------
 	hc := health.New(progDir)
@@ -1015,36 +1015,34 @@ func (ws *worldServer) handlePlayerAct(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /api/world/player/state — 玩家面板（世界概况 + 指令队列 + 回执）
+// GET /api/world/player/state — 玩家面板（Phase 2：状态卡 + 行动选项 + 指令回执）
 func (ws *worldServer) handlePlayerState(w http.ResponseWriter, r *http.Request) {
 	inst := ws.inst()
 	if inst == nil {
 		ws.writeJSON(w, 400, map[string]any{"ok": false, "error": "没有可用世界，请先创建"})
 		return
 	}
-	worldInfo := map[string]any{"name": "", "day": 0, "hero": ""}
-	pending := 0
-	consumed := 0
-	var intents []sim.PlayerIntent
-	if inst.sim != nil {
-		worldInfo["name"] = inst.name
-		worldInfo["day"] = inst.sim.CurrentDay()
-		worldInfo["hero"] = inst.sim.HeroName()
-		intents = inst.sim.PlayerIntents()
-		for _, it := range intents {
-			if it.Status == "pending" {
-				pending++
-			} else {
-				consumed++
-			}
-		}
+	if inst.sim == nil {
+		ws.writeJSON(w, 200, map[string]any{
+			"ok": true, "world": map[string]any{"name": inst.name, "day": 0, "hero": ""},
+			"intents": []sim.PlayerIntent{}, "actions": []sim.PlayerAction{},
+			"stats": map[string]int{"pending": 0, "consumed": 0},
+			"hint":  "世界尚未初始化，先 /api/world/init",
+		})
+		return
 	}
+	ps := inst.sim.PlayerState()
 	ws.writeJSON(w, 200, map[string]any{
-		"ok": true,
-		"world": worldInfo,
-		"intents": intents,
-		"stats":   map[string]int{"pending": pending, "consumed": consumed},
-		"hint":    "POST /api/world/player/act 发指令；指令会在下一个事件日被世界回应",
+		"ok":          true,
+		"world":       map[string]any{"name": ps.World, "day": ps.Day, "hero": ps.Hero.Name},
+		"hero":        ps.Hero,
+		"arc":         ps.Arc,
+		"relationships": ps.RelTop,
+		"recent_events": ps.Recent,
+		"actions":     ps.Actions,
+		"intents":     ps.Intents,
+		"stats":       ps.Stats,
+		"hint":        "选择行动或自由输入指令；指令会在下一个事件日被世界回应",
 	})
 }
 
