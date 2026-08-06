@@ -1330,6 +1330,7 @@ func (ws *worldServer) handleNovelGenerate(w http.ResponseWriter, r *http.Reques
 		DaysPerChapter int    `json:"days_per_chapter"`
 		ChapterLen     string `json:"chapter_len"`
 		All            bool   `json:"all"`
+		MaxChapters    int    `json:"max_chapters"` // >0 时只写前 N 章（分批生成用）
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	if req.DaysPerChapter > 0 {
@@ -1407,7 +1408,11 @@ func (ws *worldServer) handleNovelGenerate(w http.ResponseWriter, r *http.Reques
 	var done []int
 	var skipped []int
 	ctx := r.Context()
-	for i := range plans {
+	maxN := req.MaxChapters
+	if maxN <= 0 || maxN > len(plans) {
+		maxN = len(plans)
+	}
+	for i := 0; i < maxN; i++ {
 		p := &plans[i]
 		if written[p.Num] && !req.All {
 			p.Status = "done"
@@ -1597,7 +1602,7 @@ func (ws *worldServer) handleNovelList(w http.ResponseWriter, r *http.Request) {
 	if exports == nil {
 		exports = []string{}
 	}
-	ws.writeJSON(w, 200, map[string]any{"book": "临江异闻录", "plans": plans, "exports": exports})
+	ws.writeJSON(w, 200, map[string]any{"book": inst.novelW.BookTitle, "plans": plans, "exports": exports})
 }
 
 // GET /api/world/novel/chapter/{num} — 读取章节正文
