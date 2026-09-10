@@ -17,6 +17,10 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Format check
+        run: |
+          gofmt -l . | grep -v '^$' && exit 1 || echo "gofmt: clean"
+
       - name: Build
         run: go build -v ./...
 

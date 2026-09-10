@@ -13,8 +13,8 @@ import (
 
 func TestSlimHeroJSONStableOrder(t *testing.T) {
 	ents := map[string]engine.Entity{
-		"赵兴":   {Location: "青叶镇", Job: "商人", Status: "active", Money: 10, Health: 1.0, Relationship: map[string]float64{"颜平": 0.5}},
-		"颜平":   {Location: "青叶林", Job: "散修", Status: "active", Money: 5, Health: 0.9, Stats: map[string]any{"境界": "练气"}},
+		"赵兴":  {Location: "青叶镇", Job: "商人", Status: "active", Money: 10, Health: 1.0, Relationship: map[string]float64{"颜平": 0.5}},
+		"颜平":  {Location: "青叶林", Job: "散修", Status: "active", Money: 5, Health: 0.9, Stats: map[string]any{"境界": "练气"}},
 		"路人甲": {Location: "街上", Job: "卖菜", Status: "active"},
 		"已逝者": {Location: "坟地", Job: "无", Status: "departed"},
 	}
@@ -40,8 +40,8 @@ func TestSlimHeroJSONStableOrder(t *testing.T) {
 
 func TestSlimHeroJSONDeterministic(t *testing.T) {
 	ents := map[string]engine.Entity{
-		"赵兴":   {Location: "青叶镇", Job: "商人", Status: "active"},
-		"颜平":   {Location: "青叶林", Job: "散修", Status: "active", Stats: map[string]any{"境界": "练气"}},
+		"赵兴":  {Location: "青叶镇", Job: "商人", Status: "active"},
+		"颜平":  {Location: "青叶林", Job: "散修", Status: "active", Stats: map[string]any{"境界": "练气"}},
 		"路人甲": {Location: "街上", Job: "卖菜", Status: "active"},
 	}
 	// 同一输入两次输出必须完全一致（缓存前缀稳定性的根基）
@@ -54,7 +54,7 @@ func TestSlimHeroJSONDeterministic(t *testing.T) {
 
 func TestSlimHeroJSONFieldTier(t *testing.T) {
 	ents := map[string]engine.Entity{
-		"颜平":   {Location: "青叶林", Job: "散修", Status: "active", Money: 5, Health: 0.9, Stats: map[string]any{"境界": "练气"}},
+		"颜平":  {Location: "青叶林", Job: "散修", Status: "active", Money: 5, Health: 0.9, Stats: map[string]any{"境界": "练气"}},
 		"路人甲": {Location: "街上", Job: "卖菜", Status: "active", Money: 2, Health: 1.0},
 	}
 	out := slimHeroJSON("颜平", ents)

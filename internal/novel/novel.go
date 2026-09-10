@@ -44,9 +44,9 @@ type Writer struct {
 	Material   *MaterialBank // 描写素材库（真人大神示范，825条）
 	HeroName   string        // 主角名（写手必须用模拟主角名，不得自造）
 	// 跨章记忆（长文一致性：每章独立请求，靠注入"前情提要+伏笔"防遗忘/防断头）
-	PrevSummary string // 前面所有章节的一句话摘要（累积，最近优先）
-	Foreshadows string // 未回收伏笔清单（模拟层伏笔账本，写手可推进/回收）
-	Decisions   string // 本章涉及剧情岔口与已定方向（用户改选优先，否则 AI 代决；写手必须照此方向写）
+	PrevSummary   string // 前面所有章节的一句话摘要（累积，最近优先）
+	Foreshadows   string // 未回收伏笔清单（模拟层伏笔账本，写手可推进/回收）
+	Decisions     string // 本章涉及剧情岔口与已定方向（用户改选优先，否则 AI 代决；写手必须照此方向写）
 	ChroniclePick string // 本章编年史精选（确定性规则筛选的 SAID/FACT 原文，写手增强细节贴合，可空）
 }
 

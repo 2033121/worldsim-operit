@@ -19,15 +19,15 @@ type CharacterSheet struct {
 	Name        string         `json:"name"`
 	Role        string         `json:"role"` // protagonist | love_interest | important_npc | rival | npc（可演化）
 	Age         string         `json:"age"`
-	Identity    string         `json:"identity"`    // 职业/身份
-	Personality []string       `json:"personality"` // 性格特质（3-5个）：谨慎/固执/热心/毒舌…
-	Habits      []string       `json:"habits"`      // 习惯/小动作/口头禅（2-3个）
-	Social      []string       `json:"social"`      // 社交/人脉/对谁什么态度（2-3条）
-	Behavior    []string       `json:"behavior"`    // 行为方式/决策倾向（2-3条）
-	Thinking    []string       `json:"thinking"`    // 思考方式/价值观/底层逻辑（2-3条）
-	Motives     []string       `json:"motives"`     // 目标：短期+长期（2条）
-	Fears       []string       `json:"fears"`       // 软肋/恐惧（1-2条）
-	Secret      string         `json:"secret"`      // 秘密（他自己知道，别人不知道）
+	Identity    string         `json:"identity"`        // 职业/身份
+	Personality []string       `json:"personality"`     // 性格特质（3-5个）：谨慎/固执/热心/毒舌…
+	Habits      []string       `json:"habits"`          // 习惯/小动作/口头禅（2-3个）
+	Social      []string       `json:"social"`          // 社交/人脉/对谁什么态度（2-3条）
+	Behavior    []string       `json:"behavior"`        // 行为方式/决策倾向（2-3条）
+	Thinking    []string       `json:"thinking"`        // 思考方式/价值观/底层逻辑（2-3条）
+	Motives     []string       `json:"motives"`         // 目标：短期+长期（2条）
+	Fears       []string       `json:"fears"`           // 软肋/恐惧（1-2条）
+	Secret      string         `json:"secret"`          // 秘密（他自己知道，别人不知道）
 	Stats       map[string]any `json:"stats,omitempty"` // 世界书驱动的能力值（境界/灵根/寿元…），建档时顺带生成
 }
 
