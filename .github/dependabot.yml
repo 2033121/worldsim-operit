@@ -1,0 +1,14 @@
+# Dependabot 自动依赖更新
+# 本项目零第三方 Go 依赖，仍监控 GitHub Actions 版本
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+  # 若未来引入第三方 Go 依赖，自动开启：
+  # - package-ecosystem: "gomod"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
