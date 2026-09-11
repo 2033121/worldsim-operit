@@ -9,12 +9,12 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^3.1.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tailwindcss/vite": "^4",
     "daisyui": "^5",
-    "svelte": "^4.2.18",
+    "svelte": "^5.57.0",
     "tailwindcss": "^4",
-    "vite": "^5.3.1"
+    "vite": "^8.3.0"
   },
   "dependencies": {
     "dompurify": "^3.4.13",
